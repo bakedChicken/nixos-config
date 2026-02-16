@@ -37,10 +37,6 @@
               DEVSHELL = 1;
             };
 
-            shellHook = ''
-              eval "$(starship init bash)"
-            '';
-
             packages = with pkgs; [
               git
               starship
@@ -120,8 +116,6 @@
                   networking.useNetworkd = true;
                   systemd.network.enable = true;
                   virtualisation.hypervGuest.enable = true;
-
-                  programs.bash.enable = false;
 
                   time.timeZone = "Europe/Vienna";
                   i18n.defaultLocale = "en_US.UTF-8";

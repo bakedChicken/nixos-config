@@ -15,6 +15,9 @@
         programs.firefox.enable = true;
         programs.zed-editor.enable = true;
         programs.zed-editor.extensions = [ "nix" ];
+        programs.bash.enable = true;
+        programs.direnv.enable = true;
+        programs.starship.enable = true;
 
         programs.git = {
           enable = true;
