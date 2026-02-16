@@ -18,8 +18,7 @@
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         ./users/artur.nix
-        ./desktops/kde.nix
-        ./services/xrdp.nix
+        ./gui/desktops.nix
       ];
 
       systems = [
