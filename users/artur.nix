@@ -15,9 +15,15 @@
         programs.firefox.enable = true;
         programs.zed-editor.enable = true;
         programs.zed-editor.extensions = [ "nix" ];
-        programs.bash.enable = true;
         programs.direnv.enable = true;
         programs.starship.enable = true;
+        programs.fastfetch.enable = true;
+
+        programs.bash.enable = true;
+        programs.bash.historyControl = [ "ignoredups" ];
+        programs.bash.initExtra = ''
+          fastfetch
+        '';
 
         programs.git = {
           enable = true;
