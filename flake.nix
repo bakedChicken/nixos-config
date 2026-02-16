@@ -81,7 +81,8 @@
             modules = [
               inputs.self.nixosModules.nix-configuration
               inputs.self.nixosModules.artur
-              inputs.self.nixosModules.kde-desktop
+              inputs.self.nixosModules.kde-wayland
+              inputs.self.nixosModules.sunshine
               (
                 { pkgs, ... }:
                 {

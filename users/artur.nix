@@ -36,7 +36,10 @@
         users.users.artur = {
           description = "Artur Luppov";
           isNormalUser = true;
-          extraGroups = [ "wheel" ];
+          extraGroups = [
+            "uinput"
+            "wheel"
+          ];
           hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
           openssh.authorizedKeys.keys = [
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHDUMJQzDn3WbH69QhZVvej8JpCn6b6jUi4ZpHU952sG artur"
