@@ -18,6 +18,8 @@
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         ./users/artur.nix
+        ./desktops/kde.nix
+        ./services/xrdp.nix
       ];
 
       systems = [
@@ -80,6 +82,7 @@
             modules = [
               inputs.self.nixosModules.nix-configuration
               inputs.self.nixosModules.artur
+              inputs.self.nixosModules.kde-desktop
               (
                 { pkgs, ... }:
                 {
@@ -117,22 +120,6 @@
                   networking.useNetworkd = true;
                   systemd.network.enable = true;
                   virtualisation.hypervGuest.enable = true;
-
-                  services.desktopManager.plasma6.enable = true;
-                  services.displayManager.sddm.enable = true;
-
-                  services.xrdp = {
-                    enable = true;
-                    openFirewall = true;
-                    audio.enable = true;
-                    defaultWindowManager = "startplasma-x11";
-                  };
-
-                  services.xserver = {
-                    enable = true;
-                    autoRepeatDelay = 200;
-                    autoRepeatInterval = 35;
-                  };
 
                   programs.bash.enable = false;
 
