@@ -7,6 +7,16 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    niri-flake = {
+      url = "github:sodiboo/niri-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    noctalia-flake = {
+      url = "github:noctalia-dev/noctalia-shell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -17,9 +27,11 @@
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
-        ./users/artur.nix
-        ./gui/desktops.nix
+        ./users
+        ./gui
       ];
+
+      debug = true;
 
       systems = [
         "x86_64-linux"
@@ -29,7 +41,7 @@
       perSystem =
         { pkgs, ... }:
         {
-          formatter = pkgs.nixfmt;
+          formatter = pkgs.nixfmt-tree;
 
           devShells.default = pkgs.mkShell {
             env = {
@@ -40,7 +52,7 @@
             packages = with pkgs; [
               git
               starship
-              nixfmt
+              nixfmt-tree
               nixd
               nil
             ];
@@ -48,9 +60,17 @@
         };
 
       flake = {
-        nixosModules.nix-configuration =
-          { ... }:
-          {
+        nixosModules = {
+          home-manager = {
+            imports = [
+              inputs.home-manager.nixosModules.home-manager
+            ];
+
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+          };
+
+          nix-configuration = {
             nix = {
               settings = {
                 experimental-features = [
@@ -69,6 +89,7 @@
               channel.enable = false;
             };
           };
+        };
 
         nixosConfigurations = {
           nixos-development-environment = nixpkgs.lib.nixosSystem {
@@ -76,9 +97,11 @@
             specialArgs = { inherit inputs; };
             modules = [
               inputs.self.nixosModules.nix-configuration
+              inputs.self.nixosModules.home-manager
               inputs.self.nixosModules.artur
-              inputs.self.nixosModules.kde-wayland
               inputs.self.nixosModules.sunshine
+              inputs.self.nixosModules.xserver
+              inputs.self.nixosModules.kde-desktop
               (
                 { pkgs, ... }:
                 {
@@ -120,9 +143,6 @@
                   time.timeZone = "Europe/Vienna";
                   i18n.defaultLocale = "en_US.UTF-8";
                   i18n.supportedLocales = [ "en_US.UTF-8/UTF-8" ];
-
-                  home-manager.useGlobalPkgs = true;
-                  home-manager.useUserPackages = true;
 
                   environment.systemPackages = with pkgs; [
                     git

@@ -1,47 +1,49 @@
 { inputs, ... }:
 {
+  imports = [
+    inputs.home-manager.flakeModules.home-manager
+  ];
+
   flake = {
-    homeModules.artur =
-      { ... }:
-      {
-        home = {
-          username = "artur";
-          homeDirectory = "/home/artur";
-          stateVersion = "25.11";
-          preferXdgDirectories = true;
-        };
+    homeModules.artur = {
+      home = {
+        username = "artur";
+        homeDirectory = "/home/artur";
+        stateVersion = "25.11";
+        preferXdgDirectories = true;
+      };
 
-        programs.kitty.enable = true;
-        programs.firefox.enable = true;
-        programs.zed-editor.enable = true;
-        programs.zed-editor.extensions = [ "nix" ];
-        programs.direnv.enable = true;
-        programs.starship.enable = true;
-        programs.fastfetch.enable = true;
+      xdg.enable = true;
+      systemd.user.startServices = "sd-switch";
 
-        programs.bash.enable = true;
-        programs.bash.historyControl = [ "ignoredups" ];
-        programs.bash.initExtra = ''
+      programs.bash = {
+        enable = true;
+        historyControl = [ "ignoredups" ];
+        initExtra = ''
           fastfetch
         '';
-
-        programs.git = {
-          enable = true;
-          settings.user = {
-            name = "Artur Luppov";
-            email = "artur.luppov@icloud.com";
-          };
-        };
-
-        xdg.enable = true;
-        systemd.user.startServices = "sd-switch";
       };
+
+      programs.git = {
+        enable = true;
+        settings.user = {
+          name = "Artur Luppov";
+          email = "artur.luppov@icloud.com";
+        };
+      };
+
+      programs.kitty.enable = true;
+      programs.firefox.enable = true;
+      programs.zed-editor.enable = true;
+      programs.zed-editor.extensions = [ "nix" ];
+      programs.direnv.enable = true;
+      programs.starship.enable = true;
+      programs.fastfetch.enable = true;
+    };
 
     nixosModules.artur =
       { pkgs, ... }:
       {
-        imports = [ inputs.home-manager.nixosModules.home-manager ];
-
         users.users.artur = {
           description = "Artur Luppov";
           isNormalUser = true;
@@ -56,7 +58,9 @@
           shell = pkgs.bash;
         };
 
-        home-manager.users.artur.imports = [ inputs.self.homeModules.artur ];
+        home-manager.users.artur.imports = [
+          inputs.self.homeModules.artur
+        ];
       };
   };
 }

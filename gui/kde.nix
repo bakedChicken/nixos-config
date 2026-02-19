@@ -10,7 +10,7 @@
       };
     };
 
-    kde-desktop = {
+    xserver = {
       imports = [
         inputs.self.nixosModules.xrdp
       ];
@@ -20,35 +20,34 @@
         autoRepeatDelay = 200;
         autoRepeatInterval = 35;
       };
-
-      services.desktopManager.plasma6.enable = true;
-      services.displayManager.sddm.enable = true;
     };
 
-    sunshine =
+    kde-desktop =
       { pkgs, ... }:
       {
-        services.sunshine.enable = true;
-        services.sunshine.capSysAdmin = true;
-        services.sunshine.openFirewall = true;
-        hardware.uinput.enable = true;
-      };
-
-    kde-wayland =
-      { pkgs, ... }:
-      {
-        services = {
-          desktopManager.plasma6.enable = true;
-          displayManager.sddm.enable = true;
-          displayManager.sddm.wayland.enable = true;
-        };
+        services.desktopManager.plasma6.enable = true;
+        services.displayManager.sddm.enable = true;
 
         environment.plasma6.excludePackages = with pkgs; [
           kdePackages.elisa # Simple music player aiming to provide a nice experience for its users
           kdePackages.kate
           kdePackages.gwenview
           kdePackages.okular
+          kdePackages.konsole
+          kdePackages.kinfocenter
+          kdePackages.khelpcenter
+          kdePackages.plasma-systemmonitor
         ];
+      };
+
+    wayland =
+      { pkgs, ... }:
+      {
+        services = {
+          displayManager.sddm.wayland.enable = true;
+        };
+
+        networking.firewall.allowedTCPPorts = [ 3389 ];
 
         environment.systemPackages = with pkgs; [
           kdePackages.krdp
