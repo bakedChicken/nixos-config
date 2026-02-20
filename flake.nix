@@ -8,11 +8,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    niri-flake = {
-      url = "github:sodiboo/niri-flake";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     noctalia-flake = {
       url = "github:noctalia-dev/noctalia-shell";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -46,12 +41,9 @@
           devShells.default = pkgs.mkShell {
             env = {
               ZED_ALLOW_EMULATED_GPU = 1;
-              DEVSHELL = 1;
             };
 
             packages = with pkgs; [
-              git
-              starship
               nixfmt-tree
               nixd
               nil
