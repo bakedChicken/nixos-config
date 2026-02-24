@@ -39,10 +39,6 @@
           formatter = pkgs.nixfmt-tree;
 
           devShells.default = pkgs.mkShell {
-            env = {
-              ZED_ALLOW_EMULATED_GPU = 1;
-            };
-
             packages = with pkgs; [
               nixfmt-tree
               nixd

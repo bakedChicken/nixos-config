@@ -11,12 +11,16 @@
     };
 
     nixosModules.niri-wm =
-      { pkgs, ... }:
+      { ... }:
       {
         environment.pathsToLink = [
           "/share/applications"
           "/share/xdg-desktop-portal"
         ];
+        environment.variables = {
+          WLR_RENDERER_ALLOW_SOFTWARE = 1;
+        };
+
         services.displayManager.defaultSession = "niri";
         programs.niri.enable = true;
 
