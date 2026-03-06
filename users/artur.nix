@@ -5,42 +5,49 @@
   ];
 
   flake = {
-    homeModules.artur = {
-      home = {
-        username = "artur";
-        homeDirectory = "/home/artur";
-        stateVersion = "25.11";
-        preferXdgDirectories = true;
-      };
-
-      xdg.enable = true;
-      systemd.user.startServices = "sd-switch";
-
-      programs.bash = {
-        enable = true;
-        historyControl = [ "ignoredups" ];
-      };
-
-      programs.git = {
-        enable = true;
-        settings.user = {
-          name = "Artur Luppov";
-          email = "artur.luppov@icloud.com";
+    homeModules.artur =
+      { pkgs, ... }:
+      {
+        home = {
+          username = "artur";
+          homeDirectory = "/home/artur";
+          stateVersion = "25.11";
+          preferXdgDirectories = true;
+          packages = with pkgs; [
+            slack
+            thunderbird
+            firefox-devedition
+          ];
         };
-      };
 
-      programs.kitty.enable = true;
-      programs.firefox.enable = true;
-      programs.zed-editor.enable = true;
-      programs.zed-editor.extensions = [
-        "nix"
-        "go"
-        "csharp"
-      ];
-      programs.direnv.enable = true;
-      programs.starship.enable = true;
-      programs.fastfetch.enable = true;
-    };
+        xdg.enable = true;
+        systemd.user.startServices = "sd-switch";
+
+        programs.bash = {
+          enable = true;
+          historyControl = [ "ignoredups" ];
+        };
+
+        programs.git = {
+          enable = true;
+          settings.user = {
+            name = "Artur Luppov";
+            email = "artur.luppov@icloud.com";
+          };
+        };
+
+        programs.kitty.enable = true;
+        programs.firefox.enable = true;
+        programs.zed-editor.enable = true;
+        programs.zed-editor.extensions = [
+          "nix"
+          "go"
+          "csharp"
+        ];
+        programs.direnv.enable = true;
+        programs.starship.enable = true;
+        programs.fastfetch.enable = true;
+      };
 
     nixosModules.artur =
       { pkgs, ... }:

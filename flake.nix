@@ -132,11 +132,13 @@
                   i18n.supportedLocales = [ "en_US.UTF-8/UTF-8" ];
 
                   services.pipewire.enable = false;
-                  hardware.pulseaudio.enable = true;
+                  services.pulseaudio.enable = true;
 
                   environment.systemPackages = with pkgs; [
                     git
                   ];
+
+                  nixpkgs.config.allowUnfree = true;
 
                   system.stateVersion = "25.11";
                 }
