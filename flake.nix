@@ -87,7 +87,6 @@
               inputs.self.nixosModules.nix-configuration
               inputs.self.nixosModules.home-manager
               inputs.self.nixosModules.artur
-              inputs.self.nixosModules.sunshine
               inputs.self.nixosModules.xserver
               inputs.self.nixosModules.kde-desktop
               (
@@ -131,6 +130,9 @@
                   time.timeZone = "Europe/Vienna";
                   i18n.defaultLocale = "en_US.UTF-8";
                   i18n.supportedLocales = [ "en_US.UTF-8/UTF-8" ];
+
+                  services.pipewire.enable = false;
+                  hardware.pulseaudio.enable = true;
 
                   environment.systemPackages = with pkgs; [
                     git

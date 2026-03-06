@@ -38,6 +38,10 @@
           kdePackages.khelpcenter
           kdePackages.plasma-systemmonitor
         ];
+
+        environment.systemPackages = [
+          pkgs.kdePackages.kzones
+        ];
       };
 
     wayland =
