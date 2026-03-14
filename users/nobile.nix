@@ -5,26 +5,24 @@
   ];
 
   flake = {
-    homeModules.artur =
+    homeModules.nobile =
       { pkgs, ... }:
       {
         home = {
-          username = "artur";
-          homeDirectory = "/home/artur";
+          username = "nobile";
+          homeDirectory = "/home/nobile";
           stateVersion = "25.11";
           preferXdgDirectories = true;
           packages = with pkgs; [
-            kubectl
+            jetbrains.rider
+            remmina
+            slack
+            firefox-devedition
           ];
         };
 
         xdg.enable = true;
         systemd.user.startServices = "sd-switch";
-
-        programs.bash = {
-          enable = true;
-          historyControl = [ "ignoredups" ];
-        };
 
         programs.git = {
           enable = true;
@@ -35,7 +33,6 @@
         };
 
         programs.kitty.enable = true;
-        programs.firefox.enable = true;
         programs.zed-editor.enable = true;
         programs.zed-editor.extensions = [
           "nix"
@@ -44,13 +41,12 @@
         ];
         programs.direnv.enable = true;
         programs.starship.enable = true;
-        programs.fastfetch.enable = true;
       };
 
-    nixosModules.artur =
+    nixosModules.nobile =
       { pkgs, ... }:
       {
-        users.users.artur = {
+        users.users.nobile = {
           description = "Artur Luppov";
           isNormalUser = true;
           extraGroups = [
@@ -59,18 +55,15 @@
             "audio"
           ];
           hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
-          openssh.authorizedKeys.keys = [
-            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHDUMJQzDn3WbH69QhZVvej8JpCn6b6jUi4ZpHU952sG artur"
-          ];
-          shell = pkgs.bash;
+          shell = pkgs.powershell;
         };
 
         environment.variables = {
           ZED_ALLOW_EMULATED_GPU = 1;
         };
 
-        home-manager.users.artur.imports = [
-          inputs.self.homeModules.artur
+        home-manager.users.nobile.imports = [
+          inputs.self.homeModules.nobile
         ];
       };
   };

@@ -56,8 +56,8 @@
         environment.systemPackages = with pkgs; [
           kdePackages.krdp
           # KDE
-          wayland-utils # Wayland utilities
-          wl-clipboard # Command-line copy/paste utilities for Wayland
+          wayland-utils
+          wl-clipboard
         ];
       };
   };

@@ -87,6 +87,7 @@
               inputs.self.nixosModules.nix-configuration
               inputs.self.nixosModules.home-manager
               inputs.self.nixosModules.artur
+              inputs.self.nixosModules.nobile
               inputs.self.nixosModules.xserver
               inputs.self.nixosModules.kde-desktop
               (
@@ -136,10 +137,10 @@
 
                   environment.systemPackages = with pkgs; [
                     git
+                    neovim
                   ];
 
                   nixpkgs.config.allowUnfree = true;
-
                   system.stateVersion = "25.11";
                 }
               )
