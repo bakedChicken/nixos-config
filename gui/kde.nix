@@ -33,7 +33,6 @@
           kdePackages.kate
           kdePackages.gwenview
           kdePackages.okular
-          kdePackages.konsole
           kdePackages.kinfocenter
           kdePackages.khelpcenter
           kdePackages.plasma-systemmonitor

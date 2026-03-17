@@ -34,14 +34,7 @@
           };
         };
 
-        programs.kitty.enable = true;
         programs.firefox.enable = true;
-        programs.zed-editor.enable = true;
-        programs.zed-editor.extensions = [
-          "nix"
-          "go"
-          "csharp"
-        ];
         programs.direnv.enable = true;
         programs.starship.enable = true;
         programs.fastfetch.enable = true;
@@ -63,10 +56,6 @@
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHDUMJQzDn3WbH69QhZVvej8JpCn6b6jUi4ZpHU952sG artur"
           ];
           shell = pkgs.bash;
-        };
-
-        environment.variables = {
-          ZED_ALLOW_EMULATED_GPU = 1;
         };
 
         home-manager.users.artur.imports = [

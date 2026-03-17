@@ -18,6 +18,7 @@
             remmina
             slack
             firefox-devedition
+            claude-code
           ];
         };
 
@@ -32,13 +33,6 @@
           };
         };
 
-        programs.kitty.enable = true;
-        programs.zed-editor.enable = true;
-        programs.zed-editor.extensions = [
-          "nix"
-          "go"
-          "csharp"
-        ];
         programs.direnv.enable = true;
         programs.starship.enable = true;
       };
@@ -56,10 +50,6 @@
           ];
           hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
           shell = pkgs.powershell;
-        };
-
-        environment.variables = {
-          ZED_ALLOW_EMULATED_GPU = 1;
         };
 
         home-manager.users.nobile.imports = [
