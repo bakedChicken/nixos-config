@@ -17,7 +17,6 @@
             remmina
             slack
             firefox-devedition
-            htop
             kdePackages.dolphin
             rsync
           ];

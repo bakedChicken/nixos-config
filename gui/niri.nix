@@ -21,7 +21,7 @@
       };
 
     nixosModules.niri-wm =
-      { ... }:
+      { pkgs, ... }:
       {
         environment.pathsToLink = [
           "/share/applications"
@@ -31,6 +31,10 @@
         services.displayManager.ly.enable = true;
         services.displayManager.defaultSession = "niri";
         programs.niri.enable = true;
+
+	environment.systemPackages = with pkgs; [
+	  xwayland-satellite
+	];
 
         home-manager.users.nobile.imports = [
           inputs.noctalia-flake.homeModules.default

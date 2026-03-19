@@ -174,6 +174,7 @@
                   "sd_mod"
                 ];
                 boot.kernelModules = [ "kvm-amd" ];
+		boot.supportedFilesystems = [ "ntfs" ];
 
                 hardware.enableRedistributableFirmware = true;
                 hardware.bluetooth.enable = true;
