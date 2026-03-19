@@ -5,10 +5,20 @@
   ];
 
   flake = {
-    homeModules.niri-wm = {
-      programs.noctalia-shell.enable = true;
-      programs.fuzzel.enable = true;
-    };
+    homeModules.niri-wm =
+      { pkgs, ... }:
+      {
+        programs.noctalia-shell.enable = true;
+        programs.fuzzel.enable = true;
+        programs.alacritty.enable = true;
+        programs.swaylock.enable = true;
+
+        home.pointerCursor = {
+          package = pkgs.kdePackages.breeze;
+          name = "breeze_cursors";
+          size = 16;
+        };
+      };
 
     nixosModules.niri-wm =
       { ... }:
@@ -17,14 +27,12 @@
           "/share/applications"
           "/share/xdg-desktop-portal"
         ];
-        environment.variables = {
-          WLR_RENDERER_ALLOW_SOFTWARE = 1;
-        };
 
+        services.displayManager.ly.enable = true;
         services.displayManager.defaultSession = "niri";
         programs.niri.enable = true;
 
-        home-manager.users.artur.imports = [
+        home-manager.users.nobile.imports = [
           inputs.noctalia-flake.homeModules.default
           inputs.self.homeModules.niri-wm
         ];

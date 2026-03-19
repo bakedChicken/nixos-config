@@ -14,12 +14,17 @@
           stateVersion = "25.11";
           preferXdgDirectories = true;
           packages = with pkgs; [
-            jetbrains.rider
             remmina
             slack
             firefox-devedition
-            claude-code
+            htop
+	    kdePackages.dolphin
+	    rsync
           ];
+
+          file.".config/powershell/Microsoft.PowerShell_profile.ps1".text = ''
+            Invoke-Expression "$(direnv hook pwsh)"
+          '';
         };
 
         xdg.enable = true;
@@ -47,6 +52,7 @@
             "wheel"
             "video"
             "audio"
+            "networkmanager"
           ];
           hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
           shell = pkgs.powershell;
