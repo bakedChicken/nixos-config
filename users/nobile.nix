@@ -18,8 +18,8 @@
             slack
             firefox-devedition
             htop
-	    kdePackages.dolphin
-	    rsync
+            kdePackages.dolphin
+            rsync
           ];
 
           file.".config/powershell/Microsoft.PowerShell_profile.ps1".text = ''
@@ -56,6 +56,12 @@
           ];
           hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
           shell = pkgs.powershell;
+        };
+
+        networking.wg-quick.interfaces = {
+          wg0 = {
+            configFile = "/etc/wireguard/wg.conf";
+          };
         };
 
         home-manager.users.nobile.imports = [

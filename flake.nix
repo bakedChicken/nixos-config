@@ -146,6 +146,9 @@
                 systemd.network.enable = true;
                 virtualisation.hypervGuest.enable = true;
 
+                services.openssh.enable = true;
+                networking.firewall.allowedTCPPorts = [ 22 ];
+
                 services.pipewire.enable = false;
                 services.pulseaudio.enable = true;
               })
