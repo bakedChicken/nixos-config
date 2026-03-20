@@ -85,7 +85,6 @@
               environment.systemPackages = with pkgs; [
                 git
                 neovim
-                nvd
               ];
 
               boot.loader = {
@@ -142,8 +141,7 @@
                 ];
 
                 networking.hostName = "nixos-development-environment";
-                networking.useNetworkd = true;
-                systemd.network.enable = true;
+		networking.networkmanager.enable = true;
                 virtualisation.hypervGuest.enable = true;
 
                 services.openssh.enable = true;

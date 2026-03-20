@@ -37,7 +37,6 @@
         programs.firefox.enable = true;
         programs.direnv.enable = true;
         programs.starship.enable = true;
-        programs.fastfetch.enable = true;
       };
 
     nixosModules.artur =
@@ -50,6 +49,7 @@
             "wheel"
             "video"
             "audio"
+	    "networkmanager"
           ];
           hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
           openssh.authorizedKeys.keys = [
