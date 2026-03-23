@@ -15,6 +15,7 @@
           preferXdgDirectories = true;
           packages = with pkgs; [
             kubectl
+            k9s
           ];
         };
 
@@ -49,7 +50,7 @@
             "wheel"
             "video"
             "audio"
-	    "networkmanager"
+            "networkmanager"
           ];
           hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
           openssh.authorizedKeys.keys = [

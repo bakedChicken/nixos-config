@@ -85,6 +85,7 @@
               environment.systemPackages = with pkgs; [
                 git
                 neovim
+                helix
               ];
 
               boot.loader = {
@@ -141,7 +142,7 @@
                 ];
 
                 networking.hostName = "nixos-development-environment";
-		networking.networkmanager.enable = true;
+                networking.networkmanager.enable = true;
                 virtualisation.hypervGuest.enable = true;
 
                 services.openssh.enable = true;
@@ -172,7 +173,7 @@
                   "sd_mod"
                 ];
                 boot.kernelModules = [ "kvm-amd" ];
-		boot.supportedFilesystems = [ "ntfs" ];
+                boot.supportedFilesystems = [ "ntfs" ];
 
                 hardware.enableRedistributableFirmware = true;
                 hardware.bluetooth.enable = true;
