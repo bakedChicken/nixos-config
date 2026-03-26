@@ -119,7 +119,7 @@
               inputs.self.nixosModules.nobile
               inputs.self.nixosModules.xserver
               inputs.self.nixosModules.kde-desktop
-              ({
+              {
                 boot.initrd.systemd.enable = true;
                 boot.initrd.availableKernelModules = [ "sd_mod" ];
 
@@ -150,7 +150,7 @@
 
                 services.pipewire.enable = false;
                 services.pulseaudio.enable = true;
-              })
+              }
             ];
           };
           nobile-development-environment = nixpkgs.lib.nixosSystem {
@@ -162,7 +162,7 @@
               inputs.self.nixosModules.home-manager
               inputs.self.nixosModules.nobile
               inputs.self.nixosModules.niri-wm
-              ({
+              {
                 boot.initrd.systemd.enable = true;
                 boot.initrd.availableKernelModules = [
                   "xhci_pci"
@@ -200,7 +200,7 @@
 
                 networking.hostName = "nobile-development-environment";
                 networking.networkmanager.enable = true;
-              })
+              }
             ];
           };
         };
