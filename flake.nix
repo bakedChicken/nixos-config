@@ -46,6 +46,7 @@
               nixfmt-tree
               nixd
               nil
+              nh
             ];
           };
         };
@@ -80,28 +81,29 @@
                   ];
                 };
                 channel.enable = false;
+                optimise.automatic = true;
+                gc.automatic = true;
               };
 
               environment.systemPackages = with pkgs; [
-                git
+                gitMinimal
                 neovim
                 helix
               ];
 
-              boot.loader = {
-                systemd-boot = {
-                  enable = true;
-                  configurationLimit = 16;
-                };
-                efi.canTouchEfiVariables = true;
-                timeout = 3;
+              environment.variables = {
+                EDITOR = "nvim";
+                VISUAL = "nvim";
               };
 
+              boot.loader.systemd-boot.enable = true;
               boot.initrd.systemd.enable = true;
               boot.kernelPackages = pkgs.linuxPackages_latest;
 
               time.timeZone = "Europe/Vienna";
               i18n.defaultLocale = "en_US.UTF-8";
+
+              networking.networkmanager.enable = true;
 
               nixpkgs.config.allowUnfree = true;
               system.stateVersion = "25.11";
@@ -120,7 +122,6 @@
               inputs.self.nixosModules.xserver
               inputs.self.nixosModules.kde-desktop
               {
-                boot.initrd.systemd.enable = true;
                 boot.initrd.availableKernelModules = [ "sd_mod" ];
 
                 fileSystems."/" = {
@@ -142,7 +143,6 @@
                 ];
 
                 networking.hostName = "nixos-development-environment";
-                networking.networkmanager.enable = true;
                 virtualisation.hypervGuest.enable = true;
 
                 services.openssh.enable = true;
@@ -163,7 +163,6 @@
               inputs.self.nixosModules.nobile
               inputs.self.nixosModules.niri-wm
               {
-                boot.initrd.systemd.enable = true;
                 boot.initrd.availableKernelModules = [
                   "xhci_pci"
                   "nvme"
@@ -199,7 +198,6 @@
                 };
 
                 networking.hostName = "nobile-development-environment";
-                networking.networkmanager.enable = true;
               }
             ];
           };
