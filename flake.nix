@@ -2,9 +2,15 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     home-manager = {
       url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    disko = {
+      url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -12,12 +18,20 @@
       url = "github:noctalia-dev/noctalia-shell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    k0s = {
+      url = "github:vangourd/k0s-nix/main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     inputs@{
+      self,
       nixpkgs,
       flake-parts,
+      disko,
+      k0s,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -43,8 +57,6 @@
               nixfmt-tree
               nixd
               nil
-              nh
-              nix-tree
             ];
           };
         };
@@ -113,12 +125,12 @@
             system = "x86_64-linux";
             specialArgs = { inherit inputs; };
             modules = [
-              inputs.self.nixosModules.nix-configuration
-              inputs.self.nixosModules.home-manager
-              inputs.self.nixosModules.artur
-              inputs.self.nixosModules.nobile
-              inputs.self.nixosModules.xserver
-              inputs.self.nixosModules.kde-desktop
+              self.nixosModules.nix-configuration
+              self.nixosModules.home-manager
+              self.nixosModules.artur
+              self.nixosModules.nobile
+              self.nixosModules.xserver
+              self.nixosModules.kde-desktop
               {
                 boot.initrd.availableKernelModules = [ "sd_mod" ];
 
@@ -148,6 +160,15 @@
 
                 services.pipewire.enable = false;
                 services.pulseaudio.enable = true;
+
+                services.k0s = {
+                  enable = true;
+                  role = "single";
+                };
+
+                home-manager.users.artur.imports = [
+                  self.homeModules.artur
+                ];
               }
             ];
           };
@@ -180,6 +201,73 @@
                 };
 
                 networking.hostName = "nobile-development-environment";
+              }
+            ];
+          };
+          k8s-node-01 = nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
+            specialArgs = { inherit inputs; };
+            modules = [
+              disko.nixosModules.disko
+              k0s.nixosModules.default
+              self.nixosModules.nix-configuration
+              self.nixosModules.artur
+              {
+                networking.hostName = "k8s-node-01";
+
+                services.k0s = {
+                  enable = true;
+                  role = "controller";
+                  isLeader = true;
+                  apiAddress = "192.0.2.1";
+                  apiSans = [
+                    "192.0.2.1"
+                    "192.0.2.2"
+                  ];
+                };
+
+                virtualisation.hypervGuest.enable = true;
+
+                boot.initrd.availableKernelModules = [ "sd_mod" ];
+
+                disko.devices = {
+                  disk = {
+                    main = {
+                      device = "/dev/sda";
+                      type = "disk";
+                      content = {
+                        type = "gpt";
+                        partitions = {
+                          ESP = {
+                            priority = 1;
+                            name = "ESP";
+                            start = "1M";
+                            end = "128M";
+                            type = "EF00";
+                            content = {
+                              type = "filesystem";
+                              format = "vfat";
+                              mountpoint = "/boot";
+                              mountOptions = [ "umask=0077" ];
+                            };
+                          };
+                          root = {
+                            size = "100%";
+                            content = {
+                              type = "btrfs";
+                              extraArgs = [ "-f" ];
+                              mountpoint = "/";
+                              mountOptions = [
+                                "compress=zstd"
+                                "noatime"
+                              ];
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
+                };
               }
             ];
           };

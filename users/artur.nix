@@ -16,7 +16,6 @@
           packages = with pkgs; [
             kubectl
             k9s
-            jetbrains-toolbox
           ];
         };
 
@@ -59,10 +58,6 @@
           ];
           shell = pkgs.bash;
         };
-
-        home-manager.users.artur.imports = [
-          inputs.self.homeModules.artur
-        ];
       };
   };
 }
