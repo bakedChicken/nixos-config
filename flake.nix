@@ -8,8 +8,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
-
     noctalia-flake = {
       url = "github:noctalia-dev/noctalia-shell";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -20,7 +18,6 @@
     inputs@{
       nixpkgs,
       flake-parts,
-      nixos-hardware,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -47,6 +44,7 @@
               nixd
               nil
               nh
+              nix-tree
             ];
           };
         };
@@ -157,31 +155,15 @@
             system = "x86_64-linux";
             specialArgs = { inherit inputs; };
             modules = [
-              nixos-hardware.nixosModules.framework-amd-ai-300-series
               inputs.self.nixosModules.nix-configuration
               inputs.self.nixosModules.home-manager
               inputs.self.nixosModules.nobile
               inputs.self.nixosModules.niri-wm
               {
-                boot.initrd.availableKernelModules = [
-                  "xhci_pci"
-                  "nvme"
-                  "thunderbolt"
-                  "usbhid"
-                  "usb_storage"
-                  "sd_mod"
-                ];
-                boot.kernelModules = [ "kvm-amd" ];
-                boot.supportedFilesystems = [ "ntfs" ];
-
-                hardware.enableRedistributableFirmware = true;
-                hardware.bluetooth.enable = true;
-                hardware.graphics = {
-                  enable = true;
-                  enable32Bit = true;
-                };
+                hardware.facter.reportPath = ./facter.json;
                 services.hardware.bolt.enable = true;
                 services.upower.enable = true;
+                services.power-profiles-daemon.enable = true;
 
                 fileSystems."/" = {
                   device = "/dev/disk/by-uuid/7a6841ce-432c-4ea4-b9cb-65748577cbe3";

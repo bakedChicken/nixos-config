@@ -19,7 +19,7 @@
             firefox-devedition
             kdePackages.dolphin
             rsync
-            jetbrains.rider
+            jetbrains-toolbox
           ];
 
           file.".config/powershell/Microsoft.PowerShell_profile.ps1".text = ''
