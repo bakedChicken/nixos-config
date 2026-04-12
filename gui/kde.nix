@@ -29,13 +29,14 @@
         services.displayManager.sddm.enable = true;
 
         environment.plasma6.excludePackages = with pkgs; [
-          kdePackages.elisa # Simple music player aiming to provide a nice experience for its users
+          kdePackages.elisa
           kdePackages.kate
           kdePackages.gwenview
           kdePackages.okular
           kdePackages.kinfocenter
           kdePackages.khelpcenter
           kdePackages.plasma-systemmonitor
+          kdePackages.qrca
         ];
 
         environment.systemPackages = [

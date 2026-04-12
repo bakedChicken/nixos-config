@@ -173,6 +173,7 @@
             system = "x86_64-linux";
             specialArgs = { inherit inputs; };
             modules = [
+              disko.nixosModules.default
               k0s.nixosModules.default
               self.nixosModules.nix-configuration
               self.nixosModules.home-manager
@@ -181,23 +182,58 @@
               self.nixosModules.xserver
               self.nixosModules.kde-desktop
               {
-                fileSystems."/" = {
-                  device = "/dev/disk/by-uuid/948ba4c0-bac6-4171-82cd-7425841ef4a4";
-                  fsType = "ext4";
+                disko.devices.disk.main = {
+                  type = "disk";
+                  device = "/dev/sda";
+                  content = {
+                    type = "gpt";
+                    partitions = {
+                      ESP = {
+                        priority = 1;
+                        name = "ESP";
+                        start = "1M";
+                        end = "128M";
+                        type = "EF00";
+                        content = {
+                          type = "filesystem";
+                          format = "vfat";
+                          mountpoint = "/boot";
+                          mountOptions = [ "umask=0077" ];
+                        };
+                      };
+                      root = {
+                        size = "100%";
+                        content = {
+                          type = "btrfs";
+                          extraArgs = [ "-f" ];
+                          subvolumes = {
+                            "/root" = {
+                              mountpoint = "/";
+                              mountOptions = [
+                                "compress=zstd"
+                                "noatime"
+                              ];
+                            };
+                            "/home" = {
+                              mountpoint = "/home";
+                              mountOptions = [
+                                "compress=zstd"
+                                "noatime"
+                              ];
+                            };
+                            "/nix" = {
+                              mountpoint = "/nix";
+                              mountOptions = [
+                                "compress=zstd"
+                                "noatime"
+                              ];
+                            };
+                          };
+                        };
+                      };
+                    };
+                  };
                 };
-
-                fileSystems."/boot" = {
-                  device = "/dev/disk/by-uuid/56F9-3FCF";
-                  fsType = "vfat";
-                  options = [
-                    "fmask=0022"
-                    "dmask=0022"
-                  ];
-                };
-
-                swapDevices = [
-                  { device = "/dev/disk/by-uuid/294971f2-ef20-4e70-8de0-2527f904b864"; }
-                ];
 
                 networking.hostName = "nixos-development-environment";
                 virtualisation.hypervGuest.enable = true;
