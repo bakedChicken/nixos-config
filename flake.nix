@@ -118,6 +118,54 @@
               nixpkgs.config.allowUnfree = true;
               system.stateVersion = "25.11";
             };
+
+          k0s-node-common = {
+            services.k0s = {
+              enable = true;
+              role = "worker";
+            };
+
+            virtualisation.hypervGuest.enable = true;
+
+            disko.devices = {
+              disk = {
+                main = {
+                  device = "/dev/sda";
+                  type = "disk";
+                  content = {
+                    type = "gpt";
+                    partitions = {
+                      ESP = {
+                        priority = 1;
+                        name = "ESP";
+                        start = "1M";
+                        end = "128M";
+                        type = "EF00";
+                        content = {
+                          type = "filesystem";
+                          format = "vfat";
+                          mountpoint = "/boot";
+                          mountOptions = [ "umask=0077" ];
+                        };
+                      };
+                      root = {
+                        size = "100%";
+                        content = {
+                          type = "btrfs";
+                          extraArgs = [ "-f" ];
+                          mountpoint = "/";
+                          mountOptions = [
+                            "compress=zstd"
+                            "noatime"
+                          ];
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
         };
 
         nixosConfigurations = {
@@ -125,6 +173,7 @@
             system = "x86_64-linux";
             specialArgs = { inherit inputs; };
             modules = [
+              k0s.nixosModules.default
               self.nixosModules.nix-configuration
               self.nixosModules.home-manager
               self.nixosModules.artur
@@ -132,8 +181,6 @@
               self.nixosModules.xserver
               self.nixosModules.kde-desktop
               {
-                boot.initrd.availableKernelModules = [ "sd_mod" ];
-
                 fileSystems."/" = {
                   device = "/dev/disk/by-uuid/948ba4c0-bac6-4171-82cd-7425841ef4a4";
                   fsType = "ext4";
@@ -160,11 +207,6 @@
 
                 services.pipewire.enable = false;
                 services.pulseaudio.enable = true;
-
-                services.k0s = {
-                  enable = true;
-                  role = "single";
-                };
 
                 home-manager.users.artur.imports = [
                   self.homeModules.artur
@@ -204,6 +246,23 @@
               }
             ];
           };
+          k8s-master-node = nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
+            specialArgs = { inherit inputs; };
+            modules = [
+              k0s.nixosModules.default
+              self.nixosModules.nix-configuration
+              self.nixosModules.artur
+              {
+                networking.hostName = "k8s-master-node";
+                services.k0s = {
+                  enable = true;
+                  role = "controller";
+                  isLeader = true;
+                };
+              }
+            ];
+          };
           k8s-node-01 = nixpkgs.lib.nixosSystem {
             system = "x86_64-linux";
             specialArgs = { inherit inputs; };
@@ -211,6 +270,7 @@
               disko.nixosModules.disko
               k0s.nixosModules.default
               self.nixosModules.nix-configuration
+              self.nixosModules.k8s-node-common
               self.nixosModules.artur
               {
                 networking.hostName = "k8s-node-01";
@@ -219,54 +279,7 @@
                   enable = true;
                   role = "controller";
                   isLeader = true;
-                  apiAddress = "192.0.2.1";
-                  apiSans = [
-                    "192.0.2.1"
-                    "192.0.2.2"
-                  ];
-                };
-
-                virtualisation.hypervGuest.enable = true;
-
-                boot.initrd.availableKernelModules = [ "sd_mod" ];
-
-                disko.devices = {
-                  disk = {
-                    main = {
-                      device = "/dev/sda";
-                      type = "disk";
-                      content = {
-                        type = "gpt";
-                        partitions = {
-                          ESP = {
-                            priority = 1;
-                            name = "ESP";
-                            start = "1M";
-                            end = "128M";
-                            type = "EF00";
-                            content = {
-                              type = "filesystem";
-                              format = "vfat";
-                              mountpoint = "/boot";
-                              mountOptions = [ "umask=0077" ];
-                            };
-                          };
-                          root = {
-                            size = "100%";
-                            content = {
-                              type = "btrfs";
-                              extraArgs = [ "-f" ];
-                              mountpoint = "/";
-                              mountOptions = [
-                                "compress=zstd"
-                                "noatime"
-                              ];
-                            };
-                          };
-                        };
-                      };
-                    };
-                  };
+                  apiAddress = "";
                 };
               }
             ];
