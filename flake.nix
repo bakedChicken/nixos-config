@@ -119,6 +119,12 @@
               system.stateVersion = "25.11";
             };
 
+          incus-container = { modulesPath, ... }: {
+            imports = [
+              "${modulesPath}/virtualisation/lxc-container.nix"
+            ];
+          };
+
           k0s-node-common = {
             services.k0s = {
               enable = true;
@@ -287,6 +293,7 @@
             specialArgs = { inherit inputs; };
             modules = [
               k0s.nixosModules.default
+              self.nixosModules.incus-container
               self.nixosModules.nix-configuration
               self.nixosModules.artur
               {
@@ -294,7 +301,7 @@
                 services.k0s = {
                   enable = true;
                   role = "controller";
-                  isLeader = true;
+                  controller.isLeader = true;
                 };
               }
             ];
