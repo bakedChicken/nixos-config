@@ -106,23 +106,26 @@
                 VISUAL = "nvim";
               };
 
-              boot.loader.systemd-boot.enable = true;
-              boot.initrd.systemd.enable = true;
-              boot.kernelPackages = pkgs.linuxPackages_latest;
-
               time.timeZone = "Europe/Vienna";
               i18n.defaultLocale = "en_US.UTF-8";
-
-              networking.networkmanager.enable = true;
 
               nixpkgs.config.allowUnfree = true;
               system.stateVersion = "25.11";
             };
 
+          physical-host = { pkgs, ... }: {
+            boot.loader.systemd-boot.enable = true;
+            boot.initrd.systemd.enable = true;
+            boot.kernelPackages = pkgs.linuxPackages_latest;
+            networking.networkmanager.enable = true;
+          };
+
           incus-container = { modulesPath, ... }: {
             imports = [
               "${modulesPath}/virtualisation/lxc-container.nix"
             ];
+
+            nixpkgs.overlays = [ k0s.overlays.default ];
           };
 
           k0s-node-common = {
@@ -182,6 +185,7 @@
               disko.nixosModules.default
               k0s.nixosModules.default
               self.nixosModules.nix-configuration
+              self.nixosModules.physical-host
               self.nixosModules.home-manager
               self.nixosModules.artur
               self.nixosModules.nobile
@@ -260,10 +264,11 @@
             system = "x86_64-linux";
             specialArgs = { inherit inputs; };
             modules = [
-              inputs.self.nixosModules.nix-configuration
-              inputs.self.nixosModules.home-manager
-              inputs.self.nixosModules.nobile
-              inputs.self.nixosModules.niri-wm
+              self.nixosModules.nix-configuration
+              self.nixosModules.physical-host
+              self.nixosModules.home-manager
+              self.nixosModules.nobile
+              self.nixosModules.niri-wm
               {
                 hardware.facter.reportPath = ./facter.json;
                 services.hardware.bolt.enable = true;
@@ -293,15 +298,15 @@
             specialArgs = { inherit inputs; };
             modules = [
               k0s.nixosModules.default
-              self.nixosModules.incus-container
               self.nixosModules.nix-configuration
+              self.nixosModules.incus-container
               self.nixosModules.artur
               {
                 networking.hostName = "k8s-master-node";
                 services.k0s = {
                   enable = true;
                   role = "controller";
-                  controller.isLeader = true;
+                  spec.api.address = "172.16.30.50";
                 };
               }
             ];
@@ -322,7 +327,7 @@
                   enable = true;
                   role = "controller";
                   isLeader = true;
-                  apiAddress = "";
+                  apiAddress = "172.16.30.50";
                 };
               }
             ];
