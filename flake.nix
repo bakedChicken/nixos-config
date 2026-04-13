@@ -113,29 +113,34 @@
               system.stateVersion = "25.11";
             };
 
-          physical-host = { pkgs, ... }: {
-            boot.loader.systemd-boot.enable = true;
-            boot.initrd.systemd.enable = true;
-            boot.kernelPackages = pkgs.linuxPackages_latest;
-            networking.networkmanager.enable = true;
+          physical-host =
+            { pkgs, ... }:
+            {
+              boot.loader.systemd-boot.enable = true;
+              boot.initrd.systemd.enable = true;
+              boot.kernelPackages = pkgs.linuxPackages_latest;
+              networking.networkmanager.enable = true;
+            };
+
+          incus-container =
+            { modulesPath, ... }:
+            {
+              imports = [
+                "${modulesPath}/virtualisation/lxc-container.nix"
+              ];
+            };
+
+          hyperv-vm = {
+            virtualisation.hypervGuest.enable = true;
           };
 
-          incus-container = { modulesPath, ... }: {
-            imports = [
-              "${modulesPath}/virtualisation/lxc-container.nix"
+          k0s-overlay = {
+            nixpkgs.overlays = [
+              k0s.overlays.default
             ];
-
-            nixpkgs.overlays = [ k0s.overlays.default ];
           };
 
           k0s-node-common = {
-            services.k0s = {
-              enable = true;
-              role = "worker";
-            };
-
-            virtualisation.hypervGuest.enable = true;
-
             disko.devices = {
               disk = {
                 main = {
@@ -186,6 +191,7 @@
               k0s.nixosModules.default
               self.nixosModules.nix-configuration
               self.nixosModules.physical-host
+              self.nixosModules.hyperv-vm
               self.nixosModules.home-manager
               self.nixosModules.artur
               self.nixosModules.nobile
@@ -246,7 +252,6 @@
                 };
 
                 networking.hostName = "nixos-development-environment";
-                virtualisation.hypervGuest.enable = true;
 
                 services.openssh.enable = true;
                 networking.firewall.allowedTCPPorts = [ 22 ];
@@ -301,6 +306,7 @@
               self.nixosModules.nix-configuration
               self.nixosModules.incus-container
               self.nixosModules.artur
+              self.nixosModules.k0s-overlay
               {
                 networking.hostName = "k8s-master-node";
                 services.k0s = {
@@ -318,16 +324,18 @@
               disko.nixosModules.disko
               k0s.nixosModules.default
               self.nixosModules.nix-configuration
-              self.nixosModules.k8s-node-common
+              self.nixosModules.physical-host
+              self.nixosModules.hyperv-vm
+              self.nixosModules.k0s-node-common
               self.nixosModules.artur
+              self.nixosModules.k0s-overlay
               {
                 networking.hostName = "k8s-node-01";
 
                 services.k0s = {
                   enable = true;
-                  role = "controller";
-                  isLeader = true;
-                  apiAddress = "172.16.30.50";
+                  role = "worker";
+                  spec.api.address = "172.16.30.50";
                 };
               }
             ];

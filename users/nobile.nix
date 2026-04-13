@@ -5,6 +5,20 @@
   ];
 
   flake = {
+    overlays.rider = (
+      self: super: {
+        rider = super.jetbrains.rider.overrideAttrs // rec {
+          version = "2026.1.0.1";
+          buildNumber = "261.22158.394";
+
+          src = super.fetchurl {
+            url = "https://download-cdn.jetbrains.com/rider/JetBrains.Rider-${version}.tar.gz";
+            sha256 = "";
+          };
+        };
+      }
+    );
+
     homeModules.nobile =
       { pkgs, ... }:
       {
@@ -19,7 +33,7 @@
             firefox-devedition
             kdePackages.dolphin
             rsync
-            jetbrains-toolbox
+            jetbrains.rider
           ];
 
           file.".config/powershell/Microsoft.PowerShell_profile.ps1".text = ''
@@ -64,6 +78,10 @@
             configFile = "/etc/wireguard/wg.conf";
           };
         };
+
+        nixpkgs.overlays = [
+          inputs.self.overlays.rider
+        ];
 
         home-manager.users.nobile.imports = [
           inputs.self.homeModules.nobile
