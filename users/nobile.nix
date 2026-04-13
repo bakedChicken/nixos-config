@@ -6,14 +6,22 @@
 
   flake = {
     overlays.rider = (
-      self: super: {
-        rider = super.jetbrains.rider.overrideAttrs // rec {
-          version = "2026.1.0.1";
-          buildNumber = "261.22158.394";
+      final: prev: {
+        jetbrains = prev.jetbrains // {
+          rider = prev.jetbrains.rider.overrideAttrs rec {
+            version = "2026.1.0.1";
+            buildNumber = "261.22158.394";
 
-          src = super.fetchurl {
-            url = "https://download-cdn.jetbrains.com/rider/JetBrains.Rider-${version}.tar.gz";
-            sha256 = "";
+            src = prev.fetchurl {
+              url = "https://download-cdn.jetbrains.com/rider/JetBrains.Rider-${version}.tar.gz";
+              sha256 = "sha256-moIysTTsq7abpQfNh1Bc5Pk6VQgJIT6erbyHsUXf15Y=";
+            };
+
+            autoPatchelfIgnoreMissingDeps = [
+              "libcrypt.so.1"
+              "libcrypto.so.1.1"
+              "libssl.so.1.1"
+            ];
           };
         };
       }
