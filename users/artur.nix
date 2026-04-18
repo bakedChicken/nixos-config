@@ -43,6 +43,9 @@
     nixosModules.artur =
       { pkgs, ... }:
       {
+        services.openssh.enable = true;
+        networking.firewall.allowedTCPPorts = [ 22 ];
+        security.sudo.wheelNeedsPassword = false;
         users.users.artur = {
           description = "Artur Luppov";
           isNormalUser = true;
