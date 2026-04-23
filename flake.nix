@@ -2,7 +2,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -149,6 +148,16 @@
           };
         };
 
+        nixosConfigurations = {
+          generic-node = nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
+            specialArgs = { inherit inputs; };
+            modules = [
+              self.colmenaHive.nodes.k8s-node-01
+            ];
+          };
+        };
+
         colmenaHive = colmena.lib.makeHive {
           meta = {
             nixpkgs = import nixpkgs {
@@ -222,7 +231,6 @@
                 self.nixosModules.hyperv-vm
                 self.nixosModules.home-manager
                 self.nixosModules.artur
-                self.nixosModules.nobile
                 self.nixosModules.xserver
                 self.nixosModules.kde-desktop
               ];
@@ -290,38 +298,6 @@
               ];
             };
 
-          nobile-development-environment =
-            { name, ... }:
-            {
-              imports = [
-                self.nixosModules.physical-host
-                self.nixosModules.home-manager
-                self.nixosModules.nobile
-                self.nixosModules.niri-wm
-              ];
-              deployment.allowLocalDeployment = true;
-              networking.hostName = name;
-
-              hardware.facter.reportPath = ./facter.json;
-              services.hardware.bolt.enable = true;
-              services.upower.enable = true;
-              services.power-profiles-daemon.enable = true;
-
-              fileSystems."/" = {
-                device = "/dev/disk/by-uuid/7a6841ce-432c-4ea4-b9cb-65748577cbe3";
-                fsType = "ext4";
-              };
-
-              fileSystems."/boot" = {
-                device = "/dev/disk/by-uuid/DDC1-F689";
-                fsType = "vfat";
-                options = [
-                  "fmask=0077"
-                  "dmask=0077"
-                ];
-              };
-            };
-
           k8s-master-node =
             { name, modulesPath, ... }:
             {
@@ -332,7 +308,7 @@
               ];
 
               deployment = {
-                targetHost = "172.16.30.50";
+                targetHost = "${name}.local";
                 targetUser = "artur";
                 tags = [ "k8s" ];
               };
@@ -356,6 +332,7 @@
                     address = "172.16.30.50";
                     sans = [
                       "172.16.30.50"
+                      "${name}.local"
                     ];
                   };
                   network = {
