@@ -6,7 +6,7 @@
 
   flake = {
     homeModules.artur =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
       {
         home = {
           username = "artur";
@@ -36,6 +36,8 @@
         };
 
         programs.firefox.enable = true;
+        programs.firefox.configPath = "${config.xdg.configHome}/mozilla/firefox";
+
         programs.direnv.enable = true;
         programs.starship.enable = true;
       };

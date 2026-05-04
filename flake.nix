@@ -13,16 +13,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    colmena = {
-      url = "github:zhaofengli/colmena";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    noctalia-flake = {
-      url = "github:noctalia-dev/noctalia-shell";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     k0s = {
       url = "github:vangourd/k0s-nix/main";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -33,7 +23,6 @@
     inputs@{
       self,
       nixpkgs,
-      colmena,
       flake-parts,
       disko,
       k0s,
@@ -59,7 +48,6 @@
 
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
-              inputs'.colmena.packages.colmena
               nixfmt-tree
               nixd
               nil
@@ -91,7 +79,63 @@
             virtualisation.hypervGuest.enable = true;
           };
 
+          common-nix-module =
+            { pkgs, ... }:
+            {
+              nix = {
+                settings = {
+                  experimental-features = [
+                    "nix-command"
+                    "flakes"
+                  ];
+                  trusted-users = [
+                    "root"
+                    "@wheel"
+                  ];
+                  substituters = [ "https://cache.nixos.org?priority=40" ];
+                  trusted-public-keys = [
+                    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+                  ];
+                };
+                channel.enable = false;
+                optimise.automatic = true;
+                gc.automatic = true;
+              };
+
+              environment.systemPackages = with pkgs; [
+                gitMinimal
+                neovim
+                helix
+              ];
+
+              environment.variables = {
+                EDITOR = "nvim";
+                VISUAL = "nvim";
+              };
+
+              services.avahi = {
+                enable = true;
+                nssmdns4 = true;
+                nssmdns6 = true;
+                publish = {
+                  enable = true;
+                  userServices = true;
+                  domain = true;
+                };
+              };
+
+              time.timeZone = "Europe/Vienna";
+              i18n.defaultLocale = "en_US.UTF-8";
+
+              nixpkgs.config.allowUnfree = true;
+              system.stateVersion = "25.11";
+            };
+
           k0s-node-common = {
+            nixpkgs.overlays = [
+              k0s.overlays.default
+            ];
+
             services.k0s = {
               enable = true;
               role = "worker";
@@ -149,218 +193,131 @@
         };
 
         nixosConfigurations = {
-          generic-node = nixpkgs.lib.nixosSystem {
+          nixos-development-environment = nixpkgs.lib.nixosSystem {
             system = "x86_64-linux";
             specialArgs = { inherit inputs; };
             modules = [
-              self.colmenaHive.nodes.k8s-node-01
-            ];
-          };
-        };
+              disko.nixosModules.default
+              self.nixosModules.common-nix-module
+              self.nixosModules.physical-host
+              self.nixosModules.hyperv-vm
+              self.nixosModules.home-manager
+              self.nixosModules.artur
+              self.nixosModules.xserver
+              self.nixosModules.kde-desktop
+              {
+                networking.hostName = "nixos-development-environment";
 
-        colmenaHive = colmena.lib.makeHive {
-          meta = {
-            nixpkgs = import nixpkgs {
-              system = "x86_64-linux";
-              overlays = [
-                k0s.overlays.default
-              ];
-            };
-
-            specialArgs = { inherit inputs; };
-          };
-
-          defaults =
-            { pkgs, ... }:
-            {
-              nix = {
-                settings = {
-                  experimental-features = [
-                    "nix-command"
-                    "flakes"
-                  ];
-                  trusted-users = [
-                    "root"
-                    "@wheel"
-                  ];
-                  substituters = [ "https://cache.nixos.org?priority=40" ];
-                  trusted-public-keys = [
-                    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-                  ];
-                };
-                channel.enable = false;
-                optimise.automatic = true;
-                gc.automatic = true;
-              };
-
-              environment.systemPackages = with pkgs; [
-                gitMinimal
-                neovim
-                helix
-              ];
-
-              environment.variables = {
-                EDITOR = "nvim";
-                VISUAL = "nvim";
-              };
-
-              services.avahi = {
-                enable = true;
-                nssmdns = true;
-                publish = {
-                  enable = true;
-                  userServices = true;
-                  domain = true;
-                };
-              };
-
-              time.timeZone = "Europe/Vienna";
-              i18n.defaultLocale = "en_US.UTF-8";
-
-              nixpkgs.config.allowUnfree = true;
-              system.stateVersion = "25.11";
-            };
-
-          nixos-development-environment =
-            { name, ... }:
-            {
-              imports = [
-                disko.nixosModules.default
-                k0s.nixosModules.default
-                self.nixosModules.physical-host
-                self.nixosModules.hyperv-vm
-                self.nixosModules.home-manager
-                self.nixosModules.artur
-                self.nixosModules.xserver
-                self.nixosModules.kde-desktop
-              ];
-              deployment.allowLocalDeployment = true;
-              networking.hostName = name;
-
-              disko.devices.disk.main = {
-                type = "disk";
-                device = "/dev/sda";
-                content = {
-                  type = "gpt";
-                  partitions = {
-                    ESP = {
-                      priority = 1;
-                      name = "ESP";
-                      start = "1M";
-                      end = "128M";
-                      type = "EF00";
-                      content = {
-                        type = "filesystem";
-                        format = "vfat";
-                        mountpoint = "/boot";
-                        mountOptions = [ "umask=0077" ];
+                disko.devices.disk.main = {
+                  type = "disk";
+                  device = "/dev/sda";
+                  content = {
+                    type = "gpt";
+                    partitions = {
+                      ESP = {
+                        priority = 1;
+                        name = "ESP";
+                        start = "1M";
+                        end = "128M";
+                        type = "EF00";
+                        content = {
+                          type = "filesystem";
+                          format = "vfat";
+                          mountpoint = "/boot";
+                          mountOptions = [ "umask=0077" ];
+                        };
                       };
-                    };
-                    root = {
-                      size = "100%";
-                      content = {
-                        type = "btrfs";
-                        extraArgs = [ "-f" ];
-                        subvolumes = {
-                          "/root" = {
-                            mountpoint = "/";
-                            mountOptions = [
-                              "compress=zstd"
-                              "noatime"
-                            ];
-                          };
-                          "/home" = {
-                            mountpoint = "/home";
-                            mountOptions = [
-                              "compress=zstd"
-                              "noatime"
-                            ];
-                          };
-                          "/nix" = {
-                            mountpoint = "/nix";
-                            mountOptions = [
-                              "compress=zstd"
-                              "noatime"
-                            ];
+                      root = {
+                        size = "100%";
+                        content = {
+                          type = "btrfs";
+                          extraArgs = [ "-f" ];
+                          subvolumes = {
+                            "/root" = {
+                              mountpoint = "/";
+                              mountOptions = [
+                                "compress=zstd"
+                                "noatime"
+                              ];
+                            };
+                            "/home" = {
+                              mountpoint = "/home";
+                              mountOptions = [
+                                "compress=zstd"
+                                "noatime"
+                              ];
+                            };
+                            "/nix" = {
+                              mountpoint = "/nix";
+                              mountOptions = [
+                                "compress=zstd"
+                                "noatime"
+                              ];
+                            };
                           };
                         };
                       };
                     };
                   };
                 };
-              };
 
-              services.pipewire.enable = false;
-              services.pulseaudio.enable = true;
+                services.pipewire.enable = false;
+                services.pulseaudio.enable = true;
 
-              home-manager.users.artur.imports = [
-                self.homeModules.artur
-              ];
-            };
+                home-manager.users.artur.imports = [
+                  self.homeModules.artur
+                ];
+              }
+            ];
+          };
 
-          k8s-master-node =
-            { name, modulesPath, ... }:
-            {
-              imports = [
-                "${modulesPath}/virtualisation/lxc-container.nix"
-                k0s.nixosModules.default
-                self.nixosModules.artur
-              ];
+          k8s-master-node = nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
+            specialArgs = { inherit inputs; };
+            modules = [
+              disko.nixosModules.default
+              k0s.nixosModules.default
+              self.nixosModules.common-nix-module
+              self.nixosModules.k0s-node-common
+              self.nixosModules.artur
+              (
+                { lib, modulesPath, ... }:
+                {
+                  imports = [
+                    "${modulesPath}/virtualisation/lxc-container.nix"
+                  ];
 
-              deployment = {
-                targetHost = "${name}.local";
-                targetUser = "artur";
-                tags = [ "k8s" ];
-              };
+                  networking.hostName = "k8s-master-node";
+                  networking.firewall.allowedTCPPorts = [
+                    6443
+                    8080
+                    9443
+                    8132
+                    8133
+                  ];
+                  networking.firewall.allowedUDPPorts = [ 4789 ];
 
-              networking.hostName = name;
-              networking.firewall.allowedTCPPorts = [
-                6443
-                8080
-                9443
-                8132
-                8133
-              ];
-              networking.firewall.allowedUDPPorts = [ 4789 ];
-
-              services.k0s = {
-                enable = true;
-                role = "controller";
-                controller.isLeader = true;
-                spec = {
-                  api = {
-                    address = "172.16.30.50";
-                    sans = [
-                      "172.16.30.50"
-                      "${name}.local"
-                    ];
+                  services.k0s = {
+                    enable = true;
+                    role = lib.mkForce "controller";
+                    controller.isLeader = true;
+                    spec = {
+                      api = {
+                        address = "172.16.30.50";
+                        sans = [
+                          "172.16.30.50"
+                          "k8s-master-node.local"
+                        ];
+                      };
+                      network = {
+                        provider = "calico";
+                      };
+                    };
                   };
-                  network = {
-                    provider = "calico";
-                  };
-                };
-              };
-            };
-
-          k8s-node-01 =
-            { name, ... }:
-            {
-              imports = [
-                disko.nixosModules.disko
-                k0s.nixosModules.default
-                self.nixosModules.physical-host
-                self.nixosModules.hyperv-vm
-                self.nixosModules.k0s-node-common
-                self.nixosModules.artur
-              ];
-              deployment = {
-                targetHost = "172.16.30.46";
-                targetUser = "artur";
-                tags = [ "k8s" ];
-              };
-
-              networking.hostName = name;
-            };
+                }
+              )
+            ];
+          };
         };
       };
     };
