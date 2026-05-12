@@ -13,8 +13,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    k0s = {
-      url = "github:vangourd/k0s-nix/main";
+    deploy-rs = {
+      url = "github:serokell/deploy-rs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nvf = {
+      url = "github:notashelf/nvf";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -25,7 +30,7 @@
       nixpkgs,
       flake-parts,
       disko,
-      k0s,
+      deploy-rs,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -49,8 +54,8 @@
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
               nixfmt-tree
-              nixd
               nil
+              inputs'.deploy-rs.packages.deploy-rs
             ];
           };
         };
@@ -64,6 +69,9 @@
 
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
+            home-manager.sharedModules = [
+              inputs.nvf.homeManagerModules.default
+            ];
           };
 
           physical-host =
@@ -105,7 +113,6 @@
               environment.systemPackages = with pkgs; [
                 gitMinimal
                 neovim
-                helix
               ];
 
               environment.variables = {
@@ -131,26 +138,7 @@
               system.stateVersion = "25.11";
             };
 
-          k0s-node-common = {
-            nixpkgs.overlays = [
-              k0s.overlays.default
-            ];
-
-            services.k0s = {
-              enable = true;
-              role = "worker";
-              spec.api.address = "172.16.30.50";
-            };
-
-            environment.etc = {
-              "k0s/k0stoken" = {
-                text = ''
-                  H4sIAAAAAAAC/2xVy46zuBrc91PkBfofG5KeTqSz+Ak4CQlO2/gC3gFmmmBzaUJuPP1RZ3qkc6TZff6qXCVZVlXWn0Q5nE9du5pd4UthL+exHM6rl9fZz7x6mc1ms6IcxtNfpyIby9fsMlbdcBofrzobs9XsEIPxEMM15TpkJ8+nIuQxVyEBiNMnBsa1gWHMqUcD7BMpegWQG/PQU8AKBmArk96VtbKkEVzI3WPv9DjjIaYTGo6yrzWgVPL+kMM+zLaqZgZRym97YpGngQ6o0JhYtCUMCcrRnPFFFUHVS1vttehT3tzrkqEvKainuHKjrT1mJrgxQVXJYcCTHtMgrGhb3MrP/h8M/y/GeNiWgfoiQqwVWEhiEBYBTbSPVC7UIm2gjFCfsoSqyAhXORplHHpRoH3uou3a4jCtccC5WBOBBOEBiHkYaICe3Big6/ebcE4PfNs5sVVO2YqzMHeqXe+qaySVwXVpbJoH79cj392I4fscqqPcVFEKLM8TDdS2eiMu2mpA3Ojxfj249qtsvfPBgSJnwok2AHKED2KzfFMba3MXC+kX7mHSSRbcPwrT78WtD2kAv4gzrrNGRMctfiuZ52MW3nSgfNlgTuNlWgi9KxroK1jxrBEbYdBR2nCNEwsO4DykEh60rUJuFkJJcVvX+JEjPReNDY9BGBZTelVJf80MhdR8zglf9kzaa7mxmEmUUXcHmNSRAruJtr0qRBge+fstipeUNWpKrZJqG+yjrRjTRGwyhOLcWVayxWMGQ8qds6Nqz5MovEhpk4LjIUc2U8HoijqAhBGYB7TmzfuCT+geO52TCbxIpcXq1ntZQD80F0fcgKmo7VYm2CpWhaRZDFRioZl2cnNPhIvuCsCBBtU849bfA+jv3f5Mgd4TqTExyKNOTzMTemsDPRxoLxLC0K1G5LR0OReeBnZNmt7jQdgyq3bcwDWR6ZzykBNOPc4/r4zvbhQEdyFpoCBKiAk5ZmhTJr/3qWvmUhKX8PNQAPwmII2Eq5hM+rg06EgaPRSyGjJeLPTkff/BiRrkMYC9b/+YI8lqlekJ7QgM/eNW7DHppuMGPHKz7Ehtk2JT3XMg3Bimbh6oTjgqw21/ypqwKS32VG3vxVaPQmCv8H8PYnPfx21vcmBp1OidaIWNJtyva2/UtVBps7vTx3lOmgWPgDYZX37ENXrwTeUqYRfMF17m6uMBmhuX4sAM+ii21Zs6jRfRiluOBIiB7XLXG7VD9rpGxwjhr3wD5mkTPGIHucIoESN6yVxR5zA8crNwpFSTRp2TbZZnarpr2tDdASy4bjXKUQULgwGD4Z1Jdcxu/Y4Z42aob0tfWdnYpmRoe2TaL83yq4A43kOvibeeJEnV0rYfS97z2Oxc4adz2vQPze8wNqEpfOzH7e8hbb3r2iqTNn1C5P2NWbothA1wMHaRX5l4Q2Aej4xO3j0F+CQaelYCNYXQcO9+XpnsJiFto2FojptFmEsbs0QZ8njfY26j7DG6Hwzsf7IZMUM+CRCxCOwm5tgTAX/m8oF0/3kG/LkcruWwmlXj2J9Xf/wB/3R+wbdfLvi1AKu3+dx9mc3arClXMwPOL0XXjuV9/Lsn/p5/euKnNJ6s78Xl/Dxd8tKW42vedeN5HLL+/9Uuw1C24+s/Ss+lObV6NVt37V+nz5dvlafZz6V/kXsaPS3HzpTtanZZTkN9/jXZ+xL8aZewu0/zulq+/DcAAP//iqc3HPMGAAA=
-                '';
-                mode = "0440";
-              };
-            };
-
+          k8s-node-common = {
             disko.devices = {
               disk = {
                 main = {
@@ -276,49 +264,35 @@
             specialArgs = { inherit inputs; };
             modules = [
               disko.nixosModules.default
-              k0s.nixosModules.default
               self.nixosModules.common-nix-module
-              self.nixosModules.k0s-node-common
+              self.nixosModules.k8s-node-common
               self.nixosModules.artur
               (
-                { lib, modulesPath, ... }:
+                { modulesPath, ... }:
                 {
                   imports = [
                     "${modulesPath}/virtualisation/lxc-container.nix"
                   ];
 
                   networking.hostName = "k8s-master-node";
-                  networking.firewall.allowedTCPPorts = [
-                    6443
-                    8080
-                    9443
-                    8132
-                    8133
-                  ];
-                  networking.firewall.allowedUDPPorts = [ 4789 ];
-
-                  services.k0s = {
-                    enable = true;
-                    role = lib.mkForce "controller";
-                    controller.isLeader = true;
-                    spec = {
-                      api = {
-                        address = "172.16.30.50";
-                        sans = [
-                          "172.16.30.50"
-                          "k8s-master-node.local"
-                        ];
-                      };
-                      network = {
-                        provider = "calico";
-                      };
-                    };
-                  };
                 }
               )
             ];
           };
         };
+
+        deploy.nodes = {
+          k8s-master-node = {
+            hostname = "k8s-master-node.local";
+            interactiveSudo = true;
+            profiles.system = {
+              user = "root";
+              path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-master-node;
+            };
+          };
+        };
+
+        checks = builtins.mapAttrs (system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib;
       };
     };
 }
