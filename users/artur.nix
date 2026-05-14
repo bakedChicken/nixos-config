@@ -4,17 +4,6 @@
     homeModules.artur =
       { config, pkgs, ... }:
       {
-        home = {
-          username = "artur";
-          homeDirectory = "/home/artur";
-          stateVersion = "25.11";
-          preferXdgDirectories = true;
-          packages = with pkgs; [
-            kubectl
-            k9s
-          ];
-        };
-
         xdg.enable = true;
         systemd.user.startServices = "sd-switch";
 
@@ -36,8 +25,29 @@
           configPath = "${config.xdg.configHome}/mozilla/firefox";
         };
 
+        programs.alacritty.enable = true;
+
         programs.direnv.enable = true;
-        programs.starship.enable = true;
+        programs.starship = {
+          enable = true;
+          enableBashIntegration = true;
+          settings = {
+            hostname.ssh_only = false;
+            username.show_always = true;
+          };
+        };
+
+        programs.eza = {
+          enable = true;
+          enableBashIntegration = true;
+          colors = "always";
+          git = true;
+          icons = "always";
+          extraOptions = [
+            "--group-directories-first"
+            "--header"
+          ];
+        };
 
         programs.nvf = {
           enable = true;
@@ -67,9 +77,6 @@
     nixosModules.artur =
       { pkgs, ... }:
       {
-        services.openssh.enable = true;
-        networking.firewall.allowedTCPPorts = [ 22 ];
-        security.sudo.wheelNeedsPassword = false;
         users.users.artur = {
           description = "Artur Luppov";
           isNormalUser = true;
