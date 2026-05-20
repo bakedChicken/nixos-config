@@ -27,6 +27,11 @@
       url = "github:ryantm/agenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    agenix-rekey = {
+      url = "github:oddlama/agenix-rekey";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -38,12 +43,15 @@
       flake-parts,
       disko,
       deploy-rs,
+      agenix-rekey,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } (
       { withSystem, ... }:
       {
         imports = [
+          disko.flakeModules.default
+          agenix-rekey.flakeModules.default
           ./users
           ./gui
         ];
@@ -56,7 +64,12 @@
         ];
 
         perSystem =
-          { pkgs, inputs', ... }:
+          {
+            pkgs,
+            inputs',
+            config,
+            ...
+          }:
           {
             formatter = pkgs.nixfmt-tree;
 
@@ -64,11 +77,11 @@
               packages = with pkgs; [
                 inputs'.deploy-rs.packages.default
                 inputs'.agenix.packages.default
+                inputs'.agenix-rekey.packages.default
                 nixfmt-tree
                 nil
               ];
             };
-
           };
 
         flake = {
@@ -137,41 +150,94 @@
                 nixpkgs.config.allowUnfree = true;
                 system.stateVersion = "25.11";
               };
+          };
 
-            k8s-node-common = {
-              disko.devices = {
-                disk = {
-                  main = {
-                    device = "/dev/sda";
-                    type = "disk";
-                    content = {
-                      type = "gpt";
-                      partitions = {
-                        ESP = {
-                          priority = 1;
-                          name = "ESP";
-                          start = "1M";
-                          end = "128M";
-                          type = "EF00";
-                          content = {
-                            type = "filesystem";
-                            format = "vfat";
-                            mountpoint = "/boot";
-                            mountOptions = [ "umask=0077" ];
-                          };
-                        };
-                        root = {
-                          size = "100%";
-                          content = {
-                            type = "btrfs";
-                            extraArgs = [ "-f" ];
+          diskoConfigurations = {
+            default = {
+              disko.devices.disk.main = {
+                type = "disk";
+                device = "/dev/sda";
+                content = {
+                  type = "gpt";
+                  partitions = {
+                    ESP = {
+                      priority = 1;
+                      name = "ESP";
+                      start = "1M";
+                      end = "128M";
+                      type = "EF00";
+                      content = {
+                        type = "filesystem";
+                        format = "vfat";
+                        mountpoint = "/boot";
+                        mountOptions = [ "umask=0077" ];
+                      };
+                    };
+                    root = {
+                      size = "100%";
+                      content = {
+                        type = "btrfs";
+                        extraArgs = [ "-f" ];
+                        subvolumes = {
+                          "/root" = {
                             mountpoint = "/";
                             mountOptions = [
                               "compress=zstd"
                               "noatime"
                             ];
                           };
+                          "/home" = {
+                            mountpoint = "/home";
+                            mountOptions = [
+                              "compress=zstd"
+                              "noatime"
+                            ];
+                          };
+                          "/nix" = {
+                            mountpoint = "/nix";
+                            mountOptions = [
+                              "compress=zstd"
+                              "noatime"
+                            ];
+                          };
                         };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+
+            kubernetes-node-disk = {
+              disko.devices.disk.main = {
+                device = "/dev/sda";
+                type = "disk";
+                content = {
+                  type = "gpt";
+                  partitions = {
+                    ESP = {
+                      priority = 1;
+                      name = "ESP";
+                      start = "1M";
+                      end = "128M";
+                      type = "EF00";
+                      content = {
+                        type = "filesystem";
+                        format = "vfat";
+                        mountpoint = "/boot";
+                        mountOptions = [ "umask=0077" ];
+                      };
+                    };
+                    root = {
+                      size = "100%";
+                      content = {
+                        type = "btrfs";
+                        extraArgs = [ "-f" ];
+                        mountpoint = "/";
+                        mountOptions = [
+                          "compress=zstd"
+                          "noatime"
+                        ];
                       };
                     };
                   };
@@ -186,7 +252,8 @@
               nixpkgs.lib.nixosSystem {
                 modules = [
                   disko.nixosModules.default
-                  home-manager.nixosModules.home-manager
+                  home-manager.nixosModules.default
+                  self.diskoConfigurations.default
                   self.nixosModules.common-nix-module
                   self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
@@ -214,58 +281,6 @@
                       };
                     };
 
-                    disko.devices.disk.main = {
-                      type = "disk";
-                      device = "/dev/sda";
-                      content = {
-                        type = "gpt";
-                        partitions = {
-                          ESP = {
-                            priority = 1;
-                            name = "ESP";
-                            start = "1M";
-                            end = "128M";
-                            type = "EF00";
-                            content = {
-                              type = "filesystem";
-                              format = "vfat";
-                              mountpoint = "/boot";
-                              mountOptions = [ "umask=0077" ];
-                            };
-                          };
-                          root = {
-                            size = "100%";
-                            content = {
-                              type = "btrfs";
-                              extraArgs = [ "-f" ];
-                              subvolumes = {
-                                "/root" = {
-                                  mountpoint = "/";
-                                  mountOptions = [
-                                    "compress=zstd"
-                                    "noatime"
-                                  ];
-                                };
-                                "/home" = {
-                                  mountpoint = "/home";
-                                  mountOptions = [
-                                    "compress=zstd"
-                                    "noatime"
-                                  ];
-                                };
-                                "/nix" = {
-                                  mountpoint = "/nix";
-                                  mountOptions = [
-                                    "compress=zstd"
-                                    "noatime"
-                                  ];
-                                };
-                              };
-                            };
-                          };
-                        };
-                      };
-                    };
                   }
                 ];
               }
@@ -277,7 +292,6 @@
                 modules = [
                   disko.nixosModules.default
                   self.nixosModules.common-nix-module
-                  self.nixosModules.k8s-node-common
                   self.nixosModules.artur
                   (
                     { modulesPath, ... }:
