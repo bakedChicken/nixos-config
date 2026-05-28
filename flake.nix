@@ -42,7 +42,6 @@
       nvf,
       flake-parts,
       disko,
-      deploy-rs,
       agenix-rekey,
       ...
     }:
@@ -85,73 +84,6 @@
           };
 
         flake = {
-          nixosModules = {
-            physical-host =
-              { pkgs, ... }:
-              {
-                boot.kernelPackages = pkgs.linuxPackages_latest;
-                boot.loader.systemd-boot.enable = true;
-                boot.initrd.systemd.enable = true;
-                networking.networkmanager.enable = true;
-              };
-
-            hyperv-vm = {
-              virtualisation.hypervGuest.enable = true;
-            };
-
-            common-nix-module =
-              { pkgs, ... }:
-              {
-                nix = {
-                  settings = {
-                    experimental-features = [
-                      "nix-command"
-                      "flakes"
-                    ];
-                    trusted-users = [
-                      "root"
-                      "@wheel"
-                    ];
-                  };
-                  channel.enable = false;
-                  optimise.automatic = true;
-                  gc.automatic = true;
-                };
-
-                environment.systemPackages = with pkgs; [
-                  gitMinimal
-                  neovim
-                ];
-
-                environment.variables = {
-                  EDITOR = "nvim";
-                  VISUAL = "nvim";
-                };
-
-                services.avahi = {
-                  enable = true;
-                  nssmdns4 = true;
-                  nssmdns6 = true;
-                  publish = {
-                    enable = true;
-                    userServices = true;
-                    domain = true;
-                  };
-                };
-
-                services.openssh.enable = true;
-                networking.firewall.allowedTCPPorts = [ 22 ];
-                security.sudo.wheelNeedsPassword = false;
-
-                time.timeZone = "Europe/Vienna";
-                i18n.defaultLocale = "en_US.UTF-8";
-
-                nixpkgs.hostPlatform = "x86_64-linux";
-                nixpkgs.config.allowUnfree = true;
-                system.stateVersion = "25.11";
-              };
-          };
-
           diskoConfigurations = {
             default = {
               disko.devices.disk.main = {
@@ -246,6 +178,79 @@
             };
           };
 
+          nixosModules = {
+            physical-host =
+              { pkgs, ... }:
+              {
+                boot.kernelPackages = pkgs.linuxPackages_latest;
+                boot.loader.systemd-boot.enable = true;
+                boot.initrd.systemd.enable = true;
+                networking.networkmanager.enable = true;
+              };
+
+            hyperv-vm = {
+              virtualisation.hypervGuest.enable = true;
+            };
+
+            common-nix-module =
+              { pkgs, config, ... }:
+              {
+                nix = {
+                  settings = {
+                    experimental-features = [
+                      "nix-command"
+                      "flakes"
+                    ];
+                    trusted-users = [
+                      "root"
+                      "@wheel"
+                    ];
+                  };
+                  channel.enable = false;
+                  optimise.automatic = true;
+                  gc.automatic = true;
+                };
+
+                environment.systemPackages = with pkgs; [
+                  gitMinimal
+                  neovim
+                ];
+
+                environment.variables = {
+                  EDITOR = "nvim";
+                  VISUAL = "nvim";
+                };
+
+                services.avahi = {
+                  enable = true;
+                  nssmdns4 = true;
+                  nssmdns6 = true;
+                  publish = {
+                    enable = true;
+                    userServices = true;
+                    domain = true;
+                  };
+                };
+
+                age.rekey = {
+                  masterIdentities = [
+                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHDUMJQzDn3WbH69QhZVvej8JpCn6b6jUi4ZpHU952sG artur"
+                  ];
+                };
+
+                services.openssh.enable = true;
+                networking.firewall.allowedTCPPorts = [ 22 ];
+                security.sudo.wheelNeedsPassword = false;
+
+                time.timeZone = "Europe/Vienna";
+                i18n.defaultLocale = "en_US.UTF-8";
+
+                nixpkgs.hostPlatform = "x86_64-linux";
+                nixpkgs.config.allowUnfree = true;
+                system.stateVersion = "25.11";
+              };
+          };
+
           nixosConfigurations = {
             nixos-development-environment = withSystem "x86_64-linux" (
               { ... }:
@@ -253,6 +258,7 @@
                 modules = [
                   disko.nixosModules.default
                   home-manager.nixosModules.default
+                  agenix-rekey.nixosModules.default
                   self.diskoConfigurations.default
                   self.nixosModules.common-nix-module
                   self.nixosModules.physical-host
@@ -281,6 +287,7 @@
                       };
                     };
 
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
                   }
                 ];
               }
@@ -291,6 +298,7 @@
               nixpkgs.lib.nixosSystem {
                 modules = [
                   disko.nixosModules.default
+                  agenix-rekey.nixosModules.default
                   self.nixosModules.common-nix-module
                   self.nixosModules.artur
                   (
@@ -301,6 +309,7 @@
                       ];
 
                       networking.hostName = "k8s-master-node";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJr7aJ+CPA1IBRjaaA/YMOsjhAkavPkcM4841lwfXopF";
                     }
                   )
                 ];
@@ -314,7 +323,7 @@
               interactiveSudo = true;
               profiles.system = {
                 user = "root";
-                path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-master-node;
+                path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-master-node;
               };
             };
           };
