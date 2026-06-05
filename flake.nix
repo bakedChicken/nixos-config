@@ -42,6 +42,7 @@
       nvf,
       flake-parts,
       disko,
+      agenix,
       agenix-rekey,
       ...
     }:
@@ -50,7 +51,6 @@
       {
         imports = [
           disko.flakeModules.default
-          agenix-rekey.flakeModules.default
           ./users
           ./gui
         ];
@@ -75,7 +75,6 @@
             devShells.default = pkgs.mkShellNoCC {
               packages = with pkgs; [
                 inputs'.deploy-rs.packages.default
-                inputs'.agenix.packages.default
                 inputs'.agenix-rekey.packages.default
                 nixfmt-tree
                 nil
@@ -232,10 +231,17 @@
                   };
                 };
 
-                age.rekey = {
-                  masterIdentities = [
-                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHDUMJQzDn3WbH69QhZVvej8JpCn6b6jUi4ZpHU952sG artur"
-                  ];
+                age = {
+                  rekey = {
+                    storageMode = "local";
+                    localStorageDir = ./. + "/secrets/rekeyed/${config.networking.hostName}";
+                    masterIdentities = [
+                      "/home/artur/.ssh/id_ed25519"
+                    ];
+                  };
+                  secrets = {
+                    kubernetes-join-token.rekeyFile = ./secrets/k3s/join-token.age;
+                  };
                 };
 
                 services.openssh.enable = true;
@@ -253,11 +259,12 @@
 
           nixosConfigurations = {
             nixos-development-environment = withSystem "x86_64-linux" (
-              { ... }:
+              { config, ... }:
               nixpkgs.lib.nixosSystem {
                 modules = [
                   disko.nixosModules.default
                   home-manager.nixosModules.default
+                  agenix.nixosModules.default
                   agenix-rekey.nixosModules.default
                   self.diskoConfigurations.default
                   self.nixosModules.common-nix-module
@@ -287,7 +294,9 @@
                       };
                     };
 
-                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
+                    age.rekey = {
+                      hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
+                    };
                   }
                 ];
               }
@@ -298,11 +307,12 @@
               nixpkgs.lib.nixosSystem {
                 modules = [
                   disko.nixosModules.default
+                  agenix.nixosModules.default
                   agenix-rekey.nixosModules.default
                   self.nixosModules.common-nix-module
                   self.nixosModules.artur
                   (
-                    { modulesPath, ... }:
+                    { config, modulesPath, ... }:
                     {
                       imports = [
                         "${modulesPath}/virtualisation/lxc-container.nix"
@@ -310,6 +320,11 @@
 
                       networking.hostName = "k8s-master-node";
                       age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJr7aJ+CPA1IBRjaaA/YMOsjhAkavPkcM4841lwfXopF";
+
+                      services.k3s = {
+                        enable = true;
+                        tokenFile = config.age.secrets.kubernetes-join-token.path;
+                      };
                     }
                   )
                 ];
