@@ -50,6 +50,7 @@
       { withSystem, ... }:
       {
         imports = [
+          agenix-rekey.flakeModules.default
           disko.flakeModules.default
           ./users
           ./gui
@@ -73,9 +74,10 @@
             formatter = pkgs.nixfmt-tree;
 
             devShells.default = pkgs.mkShellNoCC {
+              nativeBuildInputs = [ config.agenix-rekey.package ];
+
               packages = with pkgs; [
                 inputs'.deploy-rs.packages.default
-                inputs'.agenix-rekey.packages.default
                 nixfmt-tree
                 nil
               ];
@@ -259,7 +261,7 @@
 
           nixosConfigurations = {
             nixos-development-environment = withSystem "x86_64-linux" (
-              { config, ... }:
+              { ... }:
               nixpkgs.lib.nixosSystem {
                 modules = [
                   disko.nixosModules.default
@@ -294,9 +296,7 @@
                       };
                     };
 
-                    age.rekey = {
-                      hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
-                    };
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
                   }
                 ];
               }
@@ -323,6 +323,36 @@
 
                       services.k3s = {
                         enable = true;
+                        agentTokenFile = config.age.secrets.kubernetes-join-token.path;
+                      };
+                    }
+                  )
+                ];
+              }
+            );
+
+            k8s-node-1 = withSystem "x86_64-linux" (
+              { ... }:
+              nixpkgs.lib.nixosSystem {
+                modules = [
+                  disko.nixosModules.default
+                  agenix.nixosModules.default
+                  agenix-rekey.nixosModules.default
+                  self.diskoConfigurations.kubernetes-node-disk
+                  self.nixosModules.common-nix-module
+                  self.nixosModules.physical-host
+                  self.nixosModules.hyperv-vm
+                  self.nixosModules.artur
+                  (
+                    { config, ... }:
+                    {
+                      networking.hostName = "k8s-node-1";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDeiJemhH4ahqK7WekbOZAGuXPa99I6njKTydf70Cfnx";
+
+                      services.k3s = {
+                        enable = true;
+                        serverAddr = "https://k8s-master-node.local:6443";
+                        role = "agent";
                         tokenFile = config.age.secrets.kubernetes-join-token.path;
                       };
                     }
@@ -339,6 +369,14 @@
               profiles.system = {
                 user = "root";
                 path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-master-node;
+              };
+            };
+            k8s-node-1 = {
+              hostname = "k8s-node-1.local";
+              interactiveSudo = true;
+              profiles.system = {
+                user = "root";
+                path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-node-1;
               };
             };
           };
