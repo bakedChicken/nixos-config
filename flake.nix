@@ -186,7 +186,11 @@
                 boot.kernelPackages = pkgs.linuxPackages_latest;
                 boot.loader.systemd-boot.enable = true;
                 boot.initrd.systemd.enable = true;
-                networking.networkmanager.enable = true;
+                networking.useDHCP = true;
+                systemd.network.config.networkConfig = {
+                  IPv4Forwarding = true;
+                  IPv6Forwarding = true;
+                };
               };
 
             hyperv-vm = {
@@ -257,6 +261,37 @@
                 nixpkgs.config.allowUnfree = true;
                 system.stateVersion = "25.11";
               };
+
+            common-kubernetes-module =
+              { config, ... }:
+              {
+                networking.firewall.allowedTCPPorts = [
+                  80
+                  443
+                  6443 # Kubernetes API server
+                  2379 # etcd
+                  2380 # etcd
+                  10250 # kubelet metrics
+                  10251
+                  10252
+                  51820
+                  51821
+                  5001 # k3s registry
+                ];
+                networking.firewall.allowedUDPPorts = [ 8472 ];
+
+                services.k3s = {
+                  enable = true;
+                  role = "server";
+                  tokenFile = config.age.secrets.kubernetes-join-token.path;
+                  extraFlags = toString [
+                    ''--write-kubeconfig-mode "0644"''
+                    "--disable servicelb"
+                    "--disable local-storage"
+                    "--disable traefik"
+                  ];
+                };
+              };
           };
 
           nixosConfigurations = {
@@ -310,6 +345,7 @@
                   agenix.nixosModules.default
                   agenix-rekey.nixosModules.default
                   self.nixosModules.common-nix-module
+                  self.nixosModules.common-kubernetes-module
                   self.nixosModules.artur
                   (
                     { config, modulesPath, ... }:
@@ -320,28 +356,7 @@
 
                       networking.hostName = "k8s-master-node";
                       age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJr7aJ+CPA1IBRjaaA/YMOsjhAkavPkcM4841lwfXopF";
-
-                      networking.firewall.allowedTCPPorts = [
-                        80
-                        443
-                        6443 # Kubernetes API server
-                        2379 # etcd
-                        2380 # etcd
-                        10250 # kubelet metrics
-                        10251
-                        10252
-                        51820
-                        51821
-                        5001 # k3s registry
-                      ];
-                      networking.firewall.allowedUDPPorts = [ 8472 ];
-
-                      #services.k3s = {
-                      #  enable = true;
-                      #  role = "server";
-                      #  clusterInit = true;
-                      #  tokenFile = config.age.secrets.kubernetes-join-token.path;
-                      #};
+                      services.k3s.clusterInit = true;
                     }
                   )
                 ];
@@ -364,33 +379,8 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-1";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDeiJemhH4ahqK7WekbOZAGuXPa99I6njKTydf70Cfnx";
-
-                      networking.firewall.allowedTCPPorts = [
-                        6443 # Kubernetes API server
-                        2379 # etcd
-                        2380 # etcd
-                        10250 # kubelet metrics
-                        10251
-                        10252
-                        51820
-                        51821
-                        5001 # k3s registry
-                      ];
-                      networking.firewall.allowedUDPPorts = [ 8472 ];
-
-                      #services.k3s = {
-                      #  enable = true;
-                      #  role = "server";
-                      #  clusterInit = true;
-                      # serverAddr = "https://k8s-master-node.local:6443";
-                      #  tokenFile = config.age.secrets.kubernetes-join-token.path;
-                      #  extraFlags = toString [
-                      #    "--disable servicelb"
-                      #    "--disable local-storage"
-                      #    "--disable traefik"
-                      #  ];
-                      #};
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEvUlJ5EfmPFCV/va2ZEP/2eWOV9N8wW9gJzzOHr0ROw";
+                      services.k3s.serverAddr = "https://k8s-master-node.local:6443";
                     }
                   )
                 ];
@@ -413,29 +403,8 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-2";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJRw1A2PcGkmcCH3bljV55VhIqmrOp15C7En/z9tewey";
-
-                      networking.firewall.allowedTCPPorts = [
-                        80
-                        443
-                        6443
-                        2379
-                        2380
-                        10250
-                        10251
-                        10252
-                        51820
-                        51821
-                        5001
-                      ];
-                      networking.firewall.allowedUDPPorts = [ 8472 ];
-
-                      #services.k3s = {
-                      #  enable = true;
-                      #  role = "server";
-                      #  serverAddr = "https://k8s-node-1.local:6443";
-                      #  tokenFile = config.age.secrets.kubernetes-join-token.path;
-                      #};
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILBLt5bzwzvq30OPzWbhVWMhVRISsQG3747c9VT2aqL3";
+                      services.k3s.serverAddr = "https://k8s-master-node.local:6443";
                     }
                   )
                 ];
