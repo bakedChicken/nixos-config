@@ -52,7 +52,6 @@
         };
 
         environment.systemPackages = with pkgs; [
-          kdePackages.bluedevil
           wayland-utils
           wl-clipboard
         ];

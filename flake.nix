@@ -308,13 +308,12 @@
                   self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
-                  self.nixosModules.xserver
                   self.nixosModules.kde-desktop
+                  self.nixosModules.wayland
+                  self.nixosModules.sunshine
                   {
                     networking.hostName = "nixos-development-environment";
-
-                    services.pipewire.enable = false;
-                    services.pulseaudio.enable = true;
+                    networking.firewall.allowedTCPPorts = [ 3389 ];
 
                     home-manager.useGlobalPkgs = true;
                     home-manager.useUserPackages = true;
