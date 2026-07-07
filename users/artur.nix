@@ -67,6 +67,7 @@
             vim.visuals.rainbow-delimiters.enable = true;
             vim.statusline.lualine.enable = true;
             vim.languages.nix.enable = true;
+            vim.languages.go.enable = true;
             vim.autocomplete.blink-cmp.enable = true;
             vim.git.enable = true;
             vim.autopairs.nvim-autopairs.enable = true;
