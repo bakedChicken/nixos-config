@@ -247,7 +247,6 @@
                   };
                   secrets = {
                     kubernetes-join-token.rekeyFile = ./secrets/k3s/join-token.age;
-                    kubernetes-kubeconfig.rekeyFile = ./secrets/k3s/kubeconfig.age;
                   };
                 };
 
@@ -322,10 +321,6 @@
                   ({ config, pkgs, ... }: {
                     networking.hostName = "nixos-development-environment";
                     networking.firewall.allowedTCPPorts = [ 3389 ];
-
-                    environment.variables = {
-                      KUBECONFIG = config.age.secrets.kubernetes-kubeconfig.path;
-                    };
 
                     home-manager.useGlobalPkgs = true;
                     home-manager.useUserPackages = true;
