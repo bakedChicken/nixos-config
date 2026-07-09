@@ -97,7 +97,7 @@
                       priority = 1;
                       name = "ESP";
                       start = "1M";
-                      end = "128M";
+                      end = "512M";
                       type = "EF00";
                       content = {
                         type = "filesystem";
@@ -152,7 +152,7 @@
                       priority = 1;
                       name = "ESP";
                       start = "1M";
-                      end = "128M";
+                      end = "512M";
                       type = "EF00";
                       content = {
                         type = "filesystem";
@@ -277,6 +277,11 @@
                   8472 # Flannel multi-node connection
                 ];
 
+                services.openiscsi = {
+                  enable = true;
+                  name = "iqn.2016-04.com.open-iscsi:${config.networking.hostName}";
+                };
+
                 services.k3s = {
                   enable = true;
                   role = "server";
@@ -286,6 +291,8 @@
                     "--disable servicelb"
                     "--disable local-storage"
                     "--disable traefik"
+                    "--tls-san ${config.networking.hostName}.local"
+                    "--tls-san k8s.burned.host"
                   ];
                 };
               };
@@ -350,7 +357,7 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-1";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHKuyZKeptfbDWJZlPblXBYL0k8q+T1W2DoXaoTCfxMt";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH+kqzmshC8vK+ocnaeZVZgrUh1U5K/FoBVGId23w818";
                       services.k3s.clusterInit = true;
                     }
                   )
@@ -375,7 +382,7 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-2";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDbPjrlPVJDTV4emcUgh3jYj9c9PnWM37JaDN7tBYoZ6";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJg3P4+igf7fLptPG4Wb3aow2IGBVXVb0gCzjO0EshUA";
                       services.k3s.serverAddr = "https://k8s-node-1.local:6443";
                     }
                   )
@@ -400,7 +407,7 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-3";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICULfwiKvANMQLMfYz4Ozdo+mF/+AwZSnASJEnaVX9S3";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEGcqaOCDZwKImbXf52hSclKXSeiq/Vg8huxRBSuRekn";
                       services.k3s.serverAddr = "https://k8s-node-1.local:6443";
                     }
                   )
