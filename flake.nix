@@ -271,21 +271,18 @@
                   6443 # Kubernetes API server
                   2379 # etcd
                   2380 # etcd
-                  10250 # kubelet metrics
-                  10251
-                  10252
-                  51820
-                  51821
                   5001 # k3s registry
                 ];
-                networking.firewall.allowedUDPPorts = [ 8472 ];
+                networking.firewall.allowedUDPPorts = [
+                  8472 # Flannel multi-node connection
+                ];
 
                 services.k3s = {
                   enable = true;
                   role = "server";
                   tokenFile = config.age.secrets.kubernetes-join-token.path;
                   extraFlags = toString [
-                    ''--write-kubeconfig-mode "0644"''
+                    "--write-kubeconfig-mode 0644"
                     "--disable servicelb"
                     "--disable local-storage"
                     "--disable traefik"
@@ -336,32 +333,6 @@
               }
             );
 
-            k8s-master-node = withSystem "x86_64-linux" (
-              { ... }:
-              nixpkgs.lib.nixosSystem {
-                modules = [
-                  disko.nixosModules.default
-                  agenix.nixosModules.default
-                  agenix-rekey.nixosModules.default
-                  self.nixosModules.common-nix-module
-                  self.nixosModules.common-kubernetes-module
-                  self.nixosModules.artur
-                  (
-                    { config, modulesPath, ... }:
-                    {
-                      imports = [
-                        "${modulesPath}/virtualisation/lxc-container.nix"
-                      ];
-
-                      networking.hostName = "k8s-master-node";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJr7aJ+CPA1IBRjaaA/YMOsjhAkavPkcM4841lwfXopF";
-                      services.k3s.clusterInit = true;
-                    }
-                  )
-                ];
-              }
-            );
-
             k8s-node-1 = withSystem "x86_64-linux" (
               { ... }:
               nixpkgs.lib.nixosSystem {
@@ -371,6 +342,7 @@
                   agenix-rekey.nixosModules.default
                   self.diskoConfigurations.kubernetes-node-disk
                   self.nixosModules.common-nix-module
+                  self.nixosModules.common-kubernetes-module
                   self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
@@ -378,8 +350,8 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-1";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEvUlJ5EfmPFCV/va2ZEP/2eWOV9N8wW9gJzzOHr0ROw";
-                      services.k3s.serverAddr = "https://k8s-master-node.local:6443";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHKuyZKeptfbDWJZlPblXBYL0k8q+T1W2DoXaoTCfxMt";
+                      services.k3s.clusterInit = true;
                     }
                   )
                 ];
@@ -395,6 +367,7 @@
                   agenix-rekey.nixosModules.default
                   self.diskoConfigurations.kubernetes-node-disk
                   self.nixosModules.common-nix-module
+                  self.nixosModules.common-kubernetes-module
                   self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
@@ -402,8 +375,33 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-2";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILBLt5bzwzvq30OPzWbhVWMhVRISsQG3747c9VT2aqL3";
-                      services.k3s.serverAddr = "https://k8s-master-node.local:6443";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDbPjrlPVJDTV4emcUgh3jYj9c9PnWM37JaDN7tBYoZ6";
+                      services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                    }
+                  )
+                ];
+              }
+            );
+
+            k8s-node-3 = withSystem "x86_64-linux" (
+              { ... }:
+              nixpkgs.lib.nixosSystem {
+                modules = [
+                  disko.nixosModules.default
+                  agenix.nixosModules.default
+                  agenix-rekey.nixosModules.default
+                  self.diskoConfigurations.kubernetes-node-disk
+                  self.nixosModules.common-nix-module
+                  self.nixosModules.common-kubernetes-module
+                  self.nixosModules.physical-host
+                  self.nixosModules.hyperv-vm
+                  self.nixosModules.artur
+                  (
+                    { config, ... }:
+                    {
+                      networking.hostName = "k8s-node-3";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICULfwiKvANMQLMfYz4Ozdo+mF/+AwZSnASJEnaVX9S3";
+                      services.k3s.serverAddr = "https://k8s-node-1.local:6443";
                     }
                   )
                 ];
@@ -412,14 +410,6 @@
           };
 
           deploy.nodes = {
-            k8s-master-node = {
-              hostname = "k8s-master-node.local";
-              sshUser = "artur";
-              profiles.system = {
-                user = "root";
-                path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-master-node;
-              };
-            };
             k8s-node-1 = {
               hostname = "k8s-node-1.local";
               sshUser = "artur";
@@ -434,6 +424,14 @@
               profiles.system = {
                 user = "root";
                 path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-node-2;
+              };
+            };
+            k8s-node-3 = {
+              hostname = "k8s-node-3.local";
+              sshUser = "artur";
+              profiles.system = {
+                user = "root";
+                path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.k8s-node-3;
               };
             };
           };
