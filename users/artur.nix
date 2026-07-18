@@ -7,6 +7,11 @@
         xdg.enable = true;
         systemd.user.startServices = "sd-switch";
 
+        services.emacs = {
+          enable = true;
+          client.enable = true;
+        };
+
         programs.bash = {
           enable = true;
           historyControl = [ "ignoredups" ];
@@ -47,6 +52,15 @@
             "--group-directories-first"
             "--header"
           ];
+        };
+
+        programs.zed-editor = {
+          enable = true;
+        };
+
+        programs.fzf = {
+          enable = true;
+          enableBashIntegration = true;
         };
 
         programs.nvf = {

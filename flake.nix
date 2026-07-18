@@ -263,18 +263,52 @@
               };
 
             common-kubernetes-module =
-              { config, ... }:
+              { pkgs, config, ... }:
               {
-                networking.firewall.allowedTCPPorts = [
-                  80
-                  443
-                  6443 # Kubernetes API server
-                  2379 # etcd
-                  2380 # etcd
-                  5001 # k3s registry
-                ];
-                networking.firewall.allowedUDPPorts = [
-                  8472 # Flannel multi-node connection
+                networking = {
+                  dhcpcd.denyInterfaces = [
+                    "lxc*"
+                    "cilium*"
+                  ];
+
+                  firewall = {
+                    checkReversePath = false;
+
+                    allowedTCPPorts = [
+                      80
+                      443
+                      6443
+                      2379
+                      2380
+                      4240
+                      4244
+                      4245
+                      4250
+                      6060
+                      6061
+                      6062
+                      9878
+                      9879
+                      9890
+                      9891
+                      9833
+                      9901
+                      9962
+                      9963
+                      9964
+                      10250
+                    ];
+                    allowedUDPPorts = [ 8472 ];
+                  };
+                };
+
+                environment.variables = {
+                  KUBECONFIG = "/etc/rancher/k3s/k3s.yaml";
+                };
+
+                environment.systemPackages = with pkgs; [
+                  cilium-cli
+                  k9s
                 ];
 
                 services.openiscsi = {
@@ -286,16 +320,49 @@
                   enable = true;
                   role = "server";
                   tokenFile = config.age.secrets.kubernetes-join-token.path;
-                  extraFlags = toString [
+                  extraFlags = [
                     "--write-kubeconfig-mode 0644"
-                    "--disable servicelb"
-                    "--disable local-storage"
-                    "--disable traefik"
                     "--tls-san ${config.networking.hostName}.local"
                     "--tls-san k8s.burned.host"
+                    "--tls-san 172.16.30.201"
+                    "--cluster-cidr=10.42.0.0/16,fd42::/56"
+                    "--service-cidr=10.43.0.0/16,fd43::/112"
+                    "--flannel-backend=none"
+                    "--disable-network-policy"
+                    "--disable-kube-proxy"
+                  ];
+                  disable = [
+                    "servicelb"
+                    "traefik"
+                    "local-storage"
                   ];
                   manifests = {
                     kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
+                    gateway-api.source = pkgs.fetchurl {
+                      url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml";
+                      hash = "sha256-8NXCsL7yudgLprqQnl5dveCABjhDdgg1P0Gm69OvzZ8=";
+                    };
+                  };
+                  autoDeployCharts = {
+                    cilium = {
+                      repo = "oci://quay.io/cilium/charts/cilium";
+                      version = "1.19.5";
+                      hash = "sha256-VrYERaLGULOHzi7bE8/Y2DIZqdppOwUjkV26i+RRop4=";
+                      targetNamespace = "kube-system";
+                      extraFieldDefinitions = {
+                        spec.bootstrap = true;
+                      };
+                      values = {
+                        k8sServiceHost = "172.16.30.201";
+                        k8sServicePort = "6443";
+                        ipv6.enabled = true;
+                        kubeProxyReplacement = true;
+                        ipam.operator.clusterPoolIPv4PodCIDRList = [ "10.42.0.0/16" ];
+                        ipam.operarot.clusterPoolIPv6PodCIDRList = [ "fd42::/56" ];
+                        hubble.relay.enabled = true;
+                        hubble.ui.enabled = true;
+                      };
+                    };
                   };
                 };
               };
@@ -334,11 +401,6 @@
                         homeDirectory = "/home/artur";
                         stateVersion = "25.11";
                         preferXdgDirectories = true;
-
-                        packages = with pkgs; [
-                          kubectl
-                          k9s
-                        ];
                       };
                     };
 
@@ -365,8 +427,8 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-1";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH+kqzmshC8vK+ocnaeZVZgrUh1U5K/FoBVGId23w818";
                       services.k3s.clusterInit = true;
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKon1YzKGQsIvF3iaK82IJWiYxedxxg53dtbIOohdi";
                     }
                   )
                 ];
@@ -390,8 +452,8 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-2";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJg3P4+igf7fLptPG4Wb3aow2IGBVXVb0gCzjO0EshUA";
                       services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPI1m281PP0VBICwapnd2Mb8P1ermxVaD5m4wwlXwbG7";
                     }
                   )
                 ];
@@ -415,8 +477,8 @@
                     { config, ... }:
                     {
                       networking.hostName = "k8s-node-3";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEGcqaOCDZwKImbXf52hSclKXSeiq/Vg8huxRBSuRekn";
                       services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq+y02LvSiN9zxFMaSROQ+elyXOMUAmeI8ZQsm82BDq";
                     }
                   )
                 ];

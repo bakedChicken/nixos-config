@@ -50,8 +50,10 @@ I want to introduce basic cluster resources that should be configured via NixOS,
 
 I'm going to track the service list here:
 
-* metallb/kube-vip
+* kube-vip
 * truenas-scale-csi provisioner
-* certbot, but I'm not sure about that yet
+* certbot
 * flux
+* gateway-api
+* cillium
 
