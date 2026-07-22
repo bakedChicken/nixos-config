@@ -247,6 +247,7 @@
                   };
                   secrets = {
                     kubernetes-join-token.rekeyFile = ./secrets/k3s/join-token.age;
+                    kubernetes-cloudflare-api-token.rekeyFile = ./secrets/k3s/cloudflare-api-token.age;
                   };
                 };
 
@@ -337,6 +338,8 @@
                     "local-storage"
                   ];
                   manifests = {
+                    cloudflare-api-token.source = config.age.secrets.kubernetes-cloudflare-api-token.path;
+                    cert-manager-cluster-issuer.source = ./kubernetes/manifests/cluster-issuer.yaml;
                     kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
                     gateway-api.source = pkgs.fetchurl {
                       url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml";
@@ -346,8 +349,8 @@
                   autoDeployCharts = {
                     cilium = {
                       repo = "oci://quay.io/cilium/charts/cilium";
-                      version = "1.19.5";
-                      hash = "sha256-VrYERaLGULOHzi7bE8/Y2DIZqdppOwUjkV26i+RRop4=";
+                      version = "1.19.6";
+                      hash = "sha256-IcQ89ThB+asDdQR9lapMZAUepSu9LGeUFuZAj18ckXk=";
                       targetNamespace = "kube-system";
                       extraFieldDefinitions = {
                         spec.bootstrap = true;
@@ -361,6 +364,24 @@
                         ipam.operarot.clusterPoolIPv6PodCIDRList = [ "fd42::/56" ];
                         hubble.relay.enabled = true;
                         hubble.ui.enabled = true;
+                        gatewayAPI = {
+                          enabled = true;
+                          enableAlpn = true;
+                        };
+                      };
+                    };
+                    cert-manager = {
+                      repo = "oci://quay.io/jetstack/charts/cert-manager";
+                      version = "v1.21.0";
+                      hash = "sha256-nCxvq/PPj+FNrLAW83yBm2a8LHnot6zeRXPUXsFB+5c=";
+                      targetNamespace = "cert-manager";
+                      createNamespace = true;
+                      extraFieldDefinitions = {
+                        spec.bootstrap = true;
+                      };
+                      values = {
+                        crds.enabled = true;
+                        config.gatewayAPI.enabled = true;
                       };
                     };
                   };
