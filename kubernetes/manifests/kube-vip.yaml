@@ -99,7 +99,7 @@ spec:
             - name: svc_leasename
               value: plndr-svcs-lock
             - name: address
-              value: k8s.burned.host
+              value: burned.host
             - name: prometheus_server
               value: :2112
           image: ghcr.io/kube-vip/kube-vip:v1.2.1

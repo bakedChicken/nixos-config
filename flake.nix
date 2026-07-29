@@ -79,6 +79,7 @@
               packages = with pkgs; [
                 inputs'.deploy-rs.packages.default
                 nixfmt-tree
+                nixd
                 nil
               ];
             };
@@ -308,7 +309,6 @@
                 };
 
                 environment.systemPackages = with pkgs; [
-                  cilium-cli
                   k9s
                 ];
 
@@ -324,7 +324,7 @@
                   extraFlags = [
                     "--write-kubeconfig-mode 0644"
                     "--tls-san ${config.networking.hostName}.local"
-                    "--tls-san k8s.burned.host"
+                    "--tls-san burned.host"
                     "--tls-san 172.16.30.201"
                     "--cluster-cidr=10.42.0.0/16,fd42::/56"
                     "--service-cidr=10.43.0.0/16,fd43::/112"
@@ -341,6 +341,7 @@
                     cloudflare-api-token.source = config.age.secrets.kubernetes-cloudflare-api-token.path;
                     cert-manager-cluster-issuer.source = ./kubernetes/manifests/cluster-issuer.yaml;
                     kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
+                    gateway.source = ./kubernetes/manifests/gateway.yaml;
                     gateway-api.source = pkgs.fetchurl {
                       url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml";
                       hash = "sha256-8NXCsL7yudgLprqQnl5dveCABjhDdgg1P0Gm69OvzZ8=";
@@ -349,8 +350,8 @@
                   autoDeployCharts = {
                     cilium = {
                       repo = "oci://quay.io/cilium/charts/cilium";
-                      version = "1.19.6";
-                      hash = "sha256-IcQ89ThB+asDdQR9lapMZAUepSu9LGeUFuZAj18ckXk=";
+                      version = "1.20.0";
+                      hash = "sha256-xfATkSNg0aM09E7yXzbaWbo0FM20j0Zu4S0MT9/yeIM=";
                       targetNamespace = "kube-system";
                       extraFieldDefinitions = {
                         spec.bootstrap = true;
@@ -372,8 +373,8 @@
                     };
                     cert-manager = {
                       repo = "oci://quay.io/jetstack/charts/cert-manager";
-                      version = "v1.21.0";
-                      hash = "sha256-nCxvq/PPj+FNrLAW83yBm2a8LHnot6zeRXPUXsFB+5c=";
+                      version = "v1.21.1";
+                      hash = "sha256-wnEB8/PiNJ+0qecEMWEFv3tSrXO4yCV9NJjvfy9qStw=";
                       targetNamespace = "cert-manager";
                       createNamespace = true;
                       extraFieldDefinitions = {
@@ -382,6 +383,8 @@
                       values = {
                         crds.enabled = true;
                         config.gatewayAPI.enabled = true;
+                        config.gatewayAPI.enableListenerSet = true;
+                        config.featureGates.ListenerSets = true;
                       };
                     };
                   };
@@ -406,7 +409,7 @@
                   self.nixosModules.kde-desktop
                   self.nixosModules.wayland
                   self.nixosModules.sunshine
-                  ({ config, pkgs, ... }: {
+                  {
                     networking.hostName = "nixos-development-environment";
                     networking.firewall.allowedTCPPorts = [ 3389 ];
 
@@ -426,7 +429,7 @@
                     };
 
                     age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
-                  })
+                  }
                 ];
               }
             );
@@ -444,14 +447,11 @@
                   self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
-                  (
-                    { config, ... }:
-                    {
-                      networking.hostName = "k8s-node-1";
-                      services.k3s.clusterInit = true;
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKon1YzKGQsIvF3iaK82IJWiYxedxxg53dtbIOohdi";
-                    }
-                  )
+                  {
+                    networking.hostName = "k8s-node-1";
+                    services.k3s.clusterInit = true;
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKon1YzKGQsIvF3iaK82IJWiYxedxxg53dtbIOohdi";
+                  }
                 ];
               }
             );
@@ -469,14 +469,11 @@
                   self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
-                  (
-                    { config, ... }:
-                    {
-                      networking.hostName = "k8s-node-2";
-                      services.k3s.serverAddr = "https://k8s-node-1.local:6443";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPI1m281PP0VBICwapnd2Mb8P1ermxVaD5m4wwlXwbG7";
-                    }
-                  )
+                  {
+                    networking.hostName = "k8s-node-2";
+                    services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPI1m281PP0VBICwapnd2Mb8P1ermxVaD5m4wwlXwbG7";
+                  }
                 ];
               }
             );
@@ -494,14 +491,11 @@
                   self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
-                  (
-                    { config, ... }:
-                    {
-                      networking.hostName = "k8s-node-3";
-                      services.k3s.serverAddr = "https://k8s-node-1.local:6443";
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq+y02LvSiN9zxFMaSROQ+elyXOMUAmeI8ZQsm82BDq";
-                    }
-                  )
+                  {
+                    networking.hostName = "k8s-node-3";
+                    services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq+y02LvSiN9zxFMaSROQ+elyXOMUAmeI8ZQsm82BDq";
+                  }
                 ];
               }
             );
