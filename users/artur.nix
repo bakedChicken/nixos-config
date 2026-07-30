@@ -2,7 +2,7 @@
 {
   flake = {
     homeModules.artur =
-      { config, pkgs, ... }:
+      { config, ... }:
       {
         xdg.enable = true;
         systemd.user.startServices = "sd-switch";
@@ -92,6 +92,10 @@
     nixosModules.artur =
       { pkgs, ... }:
       {
+        environment.variables = {
+          EDITOR = "nvim";
+          VISUAL = "nvim";
+        };
         users.users.artur = {
           description = "Artur Luppov";
           isNormalUser = true;

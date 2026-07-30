@@ -181,19 +181,6 @@
           };
 
           nixosModules = {
-            physical-host =
-              { pkgs, ... }:
-              {
-                boot.kernelPackages = pkgs.linuxPackages_latest;
-                boot.loader.systemd-boot.enable = true;
-                boot.initrd.systemd.enable = true;
-                networking.useDHCP = true;
-                systemd.network.config.networkConfig = {
-                  IPv4Forwarding = true;
-                  IPv6Forwarding = true;
-                };
-              };
-
             hyperv-vm = {
               virtualisation.hypervGuest.enable = true;
             };
@@ -217,14 +204,13 @@
                   gc.automatic = true;
                 };
 
-                environment.systemPackages = with pkgs; [
-                  gitMinimal
-                  neovim
-                ];
-
-                environment.variables = {
-                  EDITOR = "nvim";
-                  VISUAL = "nvim";
+                boot.kernelPackages = pkgs.linuxPackages_latest;
+                boot.loader.systemd-boot.enable = true;
+                boot.initrd.systemd.enable = true;
+                networking.useDHCP = true;
+                systemd.network.config.networkConfig = {
+                  IPv4Forwarding = true;
+                  IPv6Forwarding = true;
                 };
 
                 services.avahi = {
@@ -249,6 +235,7 @@
                   secrets = {
                     kubernetes-join-token.rekeyFile = ./secrets/k3s/join-token.age;
                     kubernetes-cloudflare-api-token.rekeyFile = ./secrets/k3s/cloudflare-api-token.age;
+                    kubernetes-truenas-api-key.rekeyFile = ./secrets/k3s/truenas-api-key.age;
                   };
                 };
 
@@ -267,6 +254,8 @@
             common-kubernetes-module =
               { pkgs, config, ... }:
               {
+                boot.kernelModules = [ "nvme-tcp" ];
+
                 networking = {
                   dhcpcd.denyInterfaces = [
                     "lxc*"
@@ -284,23 +273,14 @@
                       2380
                       4240
                       4244
-                      4245
-                      4250
-                      6060
-                      6061
-                      6062
                       9878
                       9879
                       9890
                       9891
-                      9833
-                      9901
-                      9962
                       9963
                       9964
                       10250
                     ];
-                    allowedUDPPorts = [ 8472 ];
                   };
                 };
 
@@ -309,13 +289,9 @@
                 };
 
                 environment.systemPackages = with pkgs; [
+                  nvme-cli
                   k9s
                 ];
-
-                services.openiscsi = {
-                  enable = true;
-                  name = "iqn.2016-04.com.open-iscsi:${config.networking.hostName}";
-                };
 
                 services.k3s = {
                   enable = true;
@@ -338,14 +314,16 @@
                     "local-storage"
                   ];
                   manifests = {
-                    cloudflare-api-token.source = config.age.secrets.kubernetes-cloudflare-api-token.path;
-                    cert-manager-cluster-issuer.source = ./kubernetes/manifests/cluster-issuer.yaml;
-                    kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
-                    gateway.source = ./kubernetes/manifests/gateway.yaml;
+                    # CRDs for Gateway API
                     gateway-api.source = pkgs.fetchurl {
                       url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml";
                       hash = "sha256-8NXCsL7yudgLprqQnl5dveCABjhDdgg1P0Gm69OvzZ8=";
                     };
+                    cloudflare-api-token.source = config.age.secrets.kubernetes-cloudflare-api-token.path;
+                    truenas-api-key.source = config.age.secrets.kubernetes-truenas-api-key.path;
+                    cert-manager-cluster-issuer.source = ./kubernetes/manifests/cluster-issuer.yaml;
+                    kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
+                    gateway.source = ./kubernetes/manifests/gateway.yaml;
                   };
                   autoDeployCharts = {
                     cilium = {
@@ -387,6 +365,29 @@
                         config.featureGates.ListenerSets = true;
                       };
                     };
+                    tns-csi = {
+                      repo = "oci://registry-1.docker.io/bfenski/tns-csi-driver";
+                      version = "0.17.6";
+                      hash = "sha256-afc86SIav9UL205aYE8Su1DufJF3ot7i1iT0RXK8CTA=";
+                      targetNamespace = "kube-system";
+                      values = {
+                        truenas = {
+                          existingSecret = "truenas-api-key";
+                          skipTLSVerify = true;
+                        };
+                        storageClasses = [
+                          {
+                            enabled = true;
+                            name = "tns-csi-nvmeof";
+                            protocol = "nvmeof";
+                            pool = "tank";
+                            parentDataset = "tank/kubernetes";
+                            isDefault = true;
+                            server = "172.16.30.53";
+                          }
+                        ];
+                      };
+                    };
                   };
                 };
               };
@@ -403,7 +404,6 @@
                   agenix-rekey.nixosModules.default
                   self.diskoConfigurations.default
                   self.nixosModules.common-nix-module
-                  self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
                   self.nixosModules.kde-desktop
@@ -444,7 +444,6 @@
                   self.diskoConfigurations.kubernetes-node-disk
                   self.nixosModules.common-nix-module
                   self.nixosModules.common-kubernetes-module
-                  self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
                   {
@@ -466,7 +465,6 @@
                   self.diskoConfigurations.kubernetes-node-disk
                   self.nixosModules.common-nix-module
                   self.nixosModules.common-kubernetes-module
-                  self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
                   {
@@ -488,7 +486,6 @@
                   self.diskoConfigurations.kubernetes-node-disk
                   self.nixosModules.common-nix-module
                   self.nixosModules.common-kubernetes-module
-                  self.nixosModules.physical-host
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
                   {
