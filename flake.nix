@@ -324,6 +324,7 @@
                     cert-manager-cluster-issuer.source = ./kubernetes/manifests/cluster-issuer.yaml;
                     kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
                     gateway.source = ./kubernetes/manifests/gateway.yaml;
+                    postgres-cluster.source = ./kubernetes/manifests/postgres-cluster.yaml;
                   };
                   autoDeployCharts = {
                     cilium = {
@@ -370,6 +371,9 @@
                       version = "0.17.6";
                       hash = "sha256-afc86SIav9UL205aYE8Su1DufJF3ot7i1iT0RXK8CTA=";
                       targetNamespace = "kube-system";
+                      extraFieldDefinitions = {
+                        spec.bootstrap = true;
+                      };
                       values = {
                         truenas = {
                           existingSecret = "truenas-api-key";
@@ -387,6 +391,13 @@
                           }
                         ];
                       };
+                    };
+                    cloudnativepg = {
+                      repo = "oci://ghcr.io/cloudnative-pg/charts/cloudnative-pg";
+                      version = "0.29.0";
+                      hash = "sha256-Zo4GX/U1CNWCOHiP01s1WpJQYIQ2KalR3w5qk2Lm0y8=";
+                      targetNamespace = "postgres";
+                      createNamespace = true;
                     };
                   };
                 };
