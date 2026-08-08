@@ -98,7 +98,7 @@
                       priority = 1;
                       name = "ESP";
                       start = "1M";
-                      end = "512M";
+                      end = "2G";
                       type = "EF00";
                       content = {
                         type = "filesystem";
@@ -153,7 +153,7 @@
                       priority = 1;
                       name = "ESP";
                       start = "1M";
-                      end = "512M";
+                      end = "1G";
                       type = "EF00";
                       content = {
                         type = "filesystem";
@@ -207,10 +207,16 @@
                 boot.kernelPackages = pkgs.linuxPackages_latest;
                 boot.loader.systemd-boot.enable = true;
                 boot.initrd.systemd.enable = true;
-                networking.useDHCP = true;
-                systemd.network.config.networkConfig = {
-                  IPv4Forwarding = true;
-                  IPv6Forwarding = true;
+
+                networking.networkmanager = {
+                  enable = true;
+                  settings = {
+                    connection = {
+                      "ipv4.clat" = "auto";
+                      "ipv6.addr-gen-mode" = 0;
+                      "ipv6.privacy" = 0;
+                    };
+                  };
                 };
 
                 services.avahi = {
@@ -254,7 +260,13 @@
             common-kubernetes-module =
               { pkgs, config, ... }:
               {
-                boot.kernelModules = [ "nvme-tcp" ];
+                boot.kernelModules = [
+                  "iptables_nat"
+                  "iptables_filter"
+                  "iptables6_nat"
+                  "iptables6_filter"
+                  "nvme-tcp"
+                ];
 
                 networking = {
                   dhcpcd.denyInterfaces = [
@@ -281,6 +293,9 @@
                       9964
                       10250
                     ];
+                    allowedUDPPorts = [
+                      8472
+                    ];
                   };
                 };
 
@@ -299,11 +314,10 @@
                   tokenFile = config.age.secrets.kubernetes-join-token.path;
                   extraFlags = [
                     "--write-kubeconfig-mode 0644"
-                    "--tls-san ${config.networking.hostName}.local"
+                    "--tls-san ${config.networking.hostName}.internal.burned.host"
                     "--tls-san burned.host"
-                    "--tls-san 172.16.30.201"
-                    "--cluster-cidr=10.42.0.0/16,fd42::/56"
-                    "--service-cidr=10.43.0.0/16,fd43::/112"
+                    "--cluster-cidr=fd42::/56"
+                    "--service-cidr=fd43::/112"
                     "--flannel-backend=none"
                     "--disable-network-policy"
                     "--disable-kube-proxy"
@@ -336,12 +350,18 @@
                         spec.bootstrap = true;
                       };
                       values = {
-                        k8sServiceHost = "172.16.30.201";
+                        k8sServiceHost = "k8s-node-1.internal.burned.host";
                         k8sServicePort = "6443";
+                        ipv4.enabled = false;
                         ipv6.enabled = true;
+                        routingMode = "native";
+                        autoDirectNodeRoutes = true;
+                        ipv6NativeRoutingCIDR = "fd42::/56";
+                        ipam.operator.clusterPoolIPv6PodCIDRList = [ "fd42::/56" ];
+                        ipam.operator.clusterPoolIPv6MaskSize = 64;
+                        extraConfig.enable-ipv6-ndp = "true";
+                        extraConfig.ipv6-mcast-device = "eth0";
                         kubeProxyReplacement = true;
-                        ipam.operator.clusterPoolIPv4PodCIDRList = [ "10.42.0.0/16" ];
-                        ipam.operarot.clusterPoolIPv6PodCIDRList = [ "fd42::/56" ];
                         hubble.relay.enabled = true;
                         hubble.ui.enabled = true;
                         gatewayAPI = {
@@ -387,7 +407,7 @@
                             pool = "tank";
                             parentDataset = "tank/kubernetes";
                             isDefault = true;
-                            server = "172.16.30.53";
+                            server = "fd10:c426:803b:0:209a:2aff:fe3e:ce3e";
                           }
                         ];
                       };
@@ -460,6 +480,11 @@
                   {
                     networking.hostName = "k8s-node-1";
                     services.k3s.clusterInit = true;
+                    services.k3s.extraFlags = [
+                      "--node-ip=fd10:c426:803b:0:215:5dff:fe34:a44c"
+                      "--kubelet-arg=node-ip=fd10:c426:803b:0:215:5dff:fe34:a44c"
+                      "--tls-san=fd10:c426:803b:0:215:5dff:fe34:a44c"
+                    ];
                     age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKon1YzKGQsIvF3iaK82IJWiYxedxxg53dtbIOohdi";
                   }
                 ];
@@ -480,7 +505,12 @@
                   self.nixosModules.artur
                   {
                     networking.hostName = "k8s-node-2";
-                    services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                    services.k3s.serverAddr = "https://k8s-node-1.internal.burned.host:6443";
+                    services.k3s.extraFlags = [
+                      "--node-ip=fd10:c426:803b:0:215:5dff:fe34:a44d"
+                      "--kubelet-arg=node-ip=fd10:c426:803b:0:215:5dff:fe34:a44d"
+                      "--tls-san=fd10:c426:803b:0:215:5dff:fe34:a44d"
+                    ];
                     age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPI1m281PP0VBICwapnd2Mb8P1ermxVaD5m4wwlXwbG7";
                   }
                 ];
@@ -501,7 +531,12 @@
                   self.nixosModules.artur
                   {
                     networking.hostName = "k8s-node-3";
-                    services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                    services.k3s.serverAddr = "https://k8s-node-1.internal.burned.host:6443";
+                    services.k3s.extraFlags = [
+                      "--node-ip=fd10:c426:803b:0:215:5dff:fe34:a44f"
+                      "--kubelet-arg=node-ip=fd10:c426:803b:0:215:5dff:fe34:a44f"
+                      "--tls-san=fd10:c426:803b:0:215:5dff:fe34:a44f"
+                    ];
                     age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq+y02LvSiN9zxFMaSROQ+elyXOMUAmeI8ZQsm82BDq";
                   }
                 ];
