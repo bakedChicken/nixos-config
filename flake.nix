@@ -98,7 +98,7 @@
                       priority = 1;
                       name = "ESP";
                       start = "1M";
-                      end = "2G";
+                      end = "512M";
                       type = "EF00";
                       content = {
                         type = "filesystem";
@@ -153,7 +153,7 @@
                       priority = 1;
                       name = "ESP";
                       start = "1M";
-                      end = "1G";
+                      end = "512M";
                       type = "EF00";
                       content = {
                         type = "filesystem";
@@ -208,13 +208,12 @@
                 boot.loader.systemd-boot.enable = true;
                 boot.initrd.systemd.enable = true;
 
+                networking.useDHCP = false;
                 networking.networkmanager = {
                   enable = true;
                   settings = {
                     connection = {
                       "ipv4.clat" = "auto";
-                      "ipv6.addr-gen-mode" = 0;
-                      "ipv6.privacy" = 0;
                     };
                   };
                 };
@@ -237,11 +236,6 @@
                     masterIdentities = [
                       "/home/artur/.ssh/id_ed25519"
                     ];
-                  };
-                  secrets = {
-                    kubernetes-join-token.rekeyFile = ./secrets/k3s/join-token.age;
-                    kubernetes-cloudflare-api-token.rekeyFile = ./secrets/k3s/cloudflare-api-token.age;
-                    kubernetes-truenas-api-key.rekeyFile = ./secrets/k3s/truenas-api-key.age;
                   };
                 };
 
@@ -267,6 +261,12 @@
                   "iptables6_filter"
                   "nvme-tcp"
                 ];
+
+                age.secrets = {
+                  join-token.rekeyFile = ./secrets/k3s/join-token.age;
+                  cloudflare-api-token.rekeyFile = ./secrets/k3s/cloudflare-api-token.age;
+                  truenas-api-key.rekeyFile = ./secrets/k3s/truenas-api-key.age;
+                };
 
                 networking = {
                   dhcpcd.denyInterfaces = [
@@ -311,7 +311,7 @@
                 services.k3s = {
                   enable = true;
                   role = "server";
-                  tokenFile = config.age.secrets.kubernetes-join-token.path;
+                  tokenFile = config.age.secrets.join-token.path;
                   extraFlags = [
                     "--write-kubeconfig-mode 0644"
                     "--tls-san ${config.networking.hostName}.internal.burned.host"
@@ -333,8 +333,8 @@
                       url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml";
                       hash = "sha256-8NXCsL7yudgLprqQnl5dveCABjhDdgg1P0Gm69OvzZ8=";
                     };
-                    cloudflare-api-token.source = config.age.secrets.kubernetes-cloudflare-api-token.path;
-                    truenas-api-key.source = config.age.secrets.kubernetes-truenas-api-key.path;
+                    cloudflare-api-token.source = config.age.secrets.cloudflare-api-token.path;
+                    truenas-api-key.source = config.age.secrets.truenas-api-key.path;
                     cert-manager-cluster-issuer.source = ./kubernetes/manifests/cluster-issuer.yaml;
                     kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
                     gateway.source = ./kubernetes/manifests/gateway.yaml;

@@ -3,6 +3,17 @@
   flake = {
     homeModules = {
       hyprland-home = { pkgs, ... }: {
+        programs.kitty.enable = true; # required for the default Hyprland config
+        wayland.windowManager.hyprland = {
+          enable = true;
+          configType = "lua";
+          package = null;
+          portalPackage = null;
+          settings = {
+            "$mod" = "Super";
+          };
+        };
+        home.sessionVariables.NIXOS_OZONE_WL = "1";
         home.pointerCursor = {
           package = pkgs.kdePackages.breeze;
           name = "breeze_cursors";
@@ -21,16 +32,6 @@
         { pkgs, ... }:
         {
           services.getty.autologinUser = "artur";
-          programs.hyprland = {
-            enable = true;
-            withUWSM = true;
-            xwayland.enable = true;
-          };
-          environment.systemPackages = with pkgs; [
-            #wayland-utils
-            #wl-clipboard
-            kitty
-          ];
           home-manager.users.artur.imports = [
             self.homeModules.hyprland-home
           ];
