@@ -2,7 +2,7 @@
 {
   flake = {
     homeModules = {
-      hyprland-home = { pkgs, ... }: {
+      hyprland-home = { pkgs, lib, ... }: {
         programs.kitty.enable = true; # required for the default Hyprland config
         wayland.windowManager.hyprland = {
           enable = true;
@@ -10,20 +10,18 @@
           package = null;
           portalPackage = null;
           settings = {
-            "$mod" = "Super";
+            mod = {
+              _var = "SUPER";
+            };
+
+            monitor = {
+              output = "Virtual-1";
+              mode = "1920x1080@60";
+              position = "0x0";
+              scale = 1;
+            };
           };
         };
-        home.sessionVariables.NIXOS_OZONE_WL = "1";
-        home.pointerCursor = {
-          package = pkgs.kdePackages.breeze;
-          name = "breeze_cursors";
-          size = 16;
-        };
-        programs.bash.profileExtra = ''
-          if [ -z "$WAYLAND_DISPLAY" ] && [ "$XDG_VTNR" = 1 ]; then
-            exec uwsm start -S hyprland-uwsm.desktop
-          fi
-        '';
       };
     };
 
@@ -31,7 +29,11 @@
       hyprland =
         { pkgs, ... }:
         {
-          services.getty.autologinUser = "artur";
+          programs.hyprland = {
+            enable = true;
+            withUWSM = true;
+            xwayland.enable = true;
+          };
           home-manager.users.artur.imports = [
             self.homeModules.hyprland-home
           ];

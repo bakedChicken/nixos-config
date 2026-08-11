@@ -81,6 +81,7 @@
                 nixfmt-tree
                 nixd
                 nil
+                yq
               ];
             };
           };
@@ -314,10 +315,13 @@
                   tokenFile = config.age.secrets.join-token.path;
                   extraFlags = [
                     "--write-kubeconfig-mode 0644"
+                    "--tls-san ${config.networking.hostName}.local"
                     "--tls-san ${config.networking.hostName}.internal.burned.host"
                     "--tls-san burned.host"
-                    "--cluster-cidr=fd42::/56"
-                    "--service-cidr=fd43::/112"
+                    "--tls-san 172.16.30.200"
+                    "--tls-san 172.16.30.201"
+                    "--cluster-cidr=10.42.0.0/16,fd42::/56"
+                    "--service-cidr=10.43.0.0/16,fd43::/112"
                     "--flannel-backend=none"
                     "--disable-network-policy"
                     "--disable-kube-proxy"
@@ -350,13 +354,16 @@
                         spec.bootstrap = true;
                       };
                       values = {
-                        k8sServiceHost = "k8s-node-1.internal.burned.host";
+                        k8sServiceHost = "172.16.30.201";
                         k8sServicePort = "6443";
-                        ipv4.enabled = false;
                         ipv6.enabled = true;
                         routingMode = "native";
                         autoDirectNodeRoutes = true;
+                        ipv4NativeRoutingCIDR = "10.42.0.0/16";
                         ipv6NativeRoutingCIDR = "fd42::/56";
+                        ipam.mode = "cluster-pool";
+                        ipam.operator.clusterPoolIPv4PodCIDRList = [ "10.42.0.0/16" ];
+                        ipam.operator.clusterPoolIPv4MaskSize = 24;
                         ipam.operator.clusterPoolIPv6PodCIDRList = [ "fd42::/56" ];
                         ipam.operator.clusterPoolIPv6MaskSize = 64;
                         extraConfig.enable-ipv6-ndp = "true";
@@ -407,7 +414,7 @@
                             pool = "tank";
                             parentDataset = "tank/kubernetes";
                             isDefault = true;
-                            server = "fd10:c426:803b:0:209a:2aff:fe3e:ce3e";
+                            server = "172.16.30.53";
                           }
                         ];
                       };
@@ -437,12 +444,16 @@
                   self.nixosModules.common-nix-module
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
-                  self.nixosModules.kde-desktop
-                  self.nixosModules.wayland
+                  self.nixosModules.wm
+                  self.nixosModules.sway
                   self.nixosModules.sunshine
-                  {
+                  ({ pkgs, ... }: {
                     networking.hostName = "nixos-development-environment";
                     networking.firewall.allowedTCPPorts = [ 3389 ];
+
+                    fonts.packages = with pkgs; [
+                      nerd-fonts.fira-code
+                    ];
 
                     home-manager.useGlobalPkgs = true;
                     home-manager.useUserPackages = true;
@@ -460,7 +471,7 @@
                     };
 
                     age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
-                  }
+                  })
                 ];
               }
             );
@@ -480,12 +491,7 @@
                   {
                     networking.hostName = "k8s-node-1";
                     services.k3s.clusterInit = true;
-                    services.k3s.extraFlags = [
-                      "--node-ip=fd10:c426:803b:0:215:5dff:fe34:a44c"
-                      "--kubelet-arg=node-ip=fd10:c426:803b:0:215:5dff:fe34:a44c"
-                      "--tls-san=fd10:c426:803b:0:215:5dff:fe34:a44c"
-                    ];
-                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKon1YzKGQsIvF3iaK82IJWiYxedxxg53dtbIOohdi";
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBgayw+LEcOM0N62lRmY67rwsut5AlQzH7s30qi1/uKE";
                   }
                 ];
               }
@@ -505,13 +511,8 @@
                   self.nixosModules.artur
                   {
                     networking.hostName = "k8s-node-2";
-                    services.k3s.serverAddr = "https://k8s-node-1.internal.burned.host:6443";
-                    services.k3s.extraFlags = [
-                      "--node-ip=fd10:c426:803b:0:215:5dff:fe34:a44d"
-                      "--kubelet-arg=node-ip=fd10:c426:803b:0:215:5dff:fe34:a44d"
-                      "--tls-san=fd10:c426:803b:0:215:5dff:fe34:a44d"
-                    ];
-                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPI1m281PP0VBICwapnd2Mb8P1ermxVaD5m4wwlXwbG7";
+                    services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILg/ncWfxWXZX4oLFq13dgzcNoOyurb+fkicj4E4G9MC";
                   }
                 ];
               }
@@ -531,13 +532,8 @@
                   self.nixosModules.artur
                   {
                     networking.hostName = "k8s-node-3";
-                    services.k3s.serverAddr = "https://k8s-node-1.internal.burned.host:6443";
-                    services.k3s.extraFlags = [
-                      "--node-ip=fd10:c426:803b:0:215:5dff:fe34:a44f"
-                      "--kubelet-arg=node-ip=fd10:c426:803b:0:215:5dff:fe34:a44f"
-                      "--tls-san=fd10:c426:803b:0:215:5dff:fe34:a44f"
-                    ];
-                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq+y02LvSiN9zxFMaSROQ+elyXOMUAmeI8ZQsm82BDq";
+                    services.k3s.serverAddr = "https://k8s-node-1.local:6443";
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICsEqPnBF3JpXgFLVa37SjdKyiOBAbrj1KDtb9dSH/44";
                   }
                 ];
               }

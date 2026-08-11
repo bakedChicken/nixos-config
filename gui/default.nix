@@ -5,5 +5,6 @@
     ./niri.nix
     ./sunshine.nix
     ./sway.nix
+    ./wms.nix
   ];
 }

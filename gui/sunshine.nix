@@ -9,9 +9,9 @@
     users.users.artur.extraGroups = [ "uinput" ];
 
     # Since sunshine cannot start without logging in
-    services.displayManager.autoLogin = {
-      enable = true;
-      user = "artur";
-    };
+    # services.displayManager.autoLogin = {
+    #  enable = true;
+    #  user = "artur";
+    # };
   };
 }
