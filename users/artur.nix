@@ -9,6 +9,14 @@
 
         programs.emacs = {
           enable = true;
+          extraPackages = epkgs: [
+            epkgs.tree-sitter-langs
+            epkgs.nix-mode
+            epkgs.nixfmt
+          ];
+          extraConfig = ''
+            	    (setq standard-intend 2)
+            	  '';
         };
 
         programs.bash = {
@@ -87,10 +95,10 @@
     nixosModules.artur =
       { pkgs, ... }:
       {
-        environment.variables = {
-          EDITOR = "nvim";
-          VISUAL = "nvim";
-        };
+        #environment.variables = {
+        #  EDITOR = "nvim";
+        #  VISUAL = "nvim";
+        #};
         users.users.artur = {
           description = "Artur Luppov";
           isNormalUser = true;
