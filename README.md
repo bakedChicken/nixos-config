@@ -15,9 +15,9 @@ The default linux user on live image is `nixos`. We need to set up a password fo
 After setting up the password, execute the following nixos-anywhere commands:
 
 ```sh
-nix run github:nix-community/nixos-anywhere -- --flake .#k8s-node-1 --target-host nixos@<IP-1>
-nix run github:nix-community/nixos-anywhere -- --flake .#k8s-node-2 --target-host nixos@<IP-2>
-nix run github:nix-community/nixos-anywhere -- --flake .#k8s-node-3 --target-host nixos@<IP-3>
+nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-1 --target-host nixos@<IP-1>
+nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-2 --target-host nixos@<IP-2>
+nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-3 --target-host nixos@<IP-3>
 ```
 
 After that all VMs should reboot.

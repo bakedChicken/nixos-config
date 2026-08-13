@@ -305,8 +305,9 @@
                 };
 
                 environment.systemPackages = with pkgs; [
-                  nvme-cli
                   k9s
+                  kubectl
+                  kubectl-cnpg
                 ];
 
                 services.k3s = {
@@ -340,6 +341,7 @@
                     cloudflare-api-token.source = config.age.secrets.cloudflare-api-token.path;
                     truenas-api-key.source = config.age.secrets.truenas-api-key.path;
                     cert-manager-cluster-issuer.source = ./kubernetes/manifests/cluster-issuer.yaml;
+                    cluster-ip-pool.source = ./kubernetes/manifests/cluster-ip-pool.yaml;
                     kube-vip.source = ./kubernetes/manifests/kube-vip.yaml;
                     gateway.source = ./kubernetes/manifests/gateway.yaml;
                     postgres-cluster.source = ./kubernetes/manifests/postgres-cluster.yaml;
@@ -347,8 +349,8 @@
                   autoDeployCharts = {
                     cilium = {
                       repo = "oci://quay.io/cilium/charts/cilium";
-                      version = "1.20.0";
-                      hash = "sha256-xfATkSNg0aM09E7yXzbaWbo0FM20j0Zu4S0MT9/yeIM=";
+                      version = "1.21.0-pre.0";
+                      hash = "sha256-uQ+ba2fVZp0UP/GPUByvhWwiBinOrMFJ9Zd7H6irIS4=";
                       targetNamespace = "kube-system";
                       extraFieldDefinitions = {
                         spec.bootstrap = true;
@@ -370,10 +372,23 @@
                         extraConfig.ipv6-mcast-device = "eth0";
                         kubeProxyReplacement = true;
                         hubble.relay.enabled = true;
-                        hubble.ui.enabled = true;
                         gatewayAPI = {
                           enabled = true;
                           enableAlpn = true;
+                        };
+                        hubble.ui = {
+                          enabled = true;
+                          httpRoute = {
+                            enabled = true;
+                            hostnames = [ "hubble.burned.host" ];
+                            parentRefs = [
+                              {
+                                name = "burned-gateway";
+                                namespace = "gateway-system";
+                                sectionName = "wildcard-https";
+                              }
+                            ];
+                          };
                         };
                       };
                     };
