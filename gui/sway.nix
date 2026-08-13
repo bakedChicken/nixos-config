@@ -5,7 +5,6 @@
       enable = true;
       systemd.enable = true;
       systemd.variables = [ "--all" ];
-      #      wrapperFeatures.gtk = true;
       config = {
         modifier = "Mod1";
         terminal = "alacritty";
@@ -28,15 +27,6 @@
       wl-clipboard
       mako
     ];
-    xdg.portal = {
-      enable = true;
-      wlr.enable = true;
-    };
-    services.pipewire = {
-      enable = true;
-      alsa.enable = true;
-      pulse.enable = true;
-    };
     home-manager.users.artur.imports = [
       self.homeModules.sway
     ];

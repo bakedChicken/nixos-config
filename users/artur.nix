@@ -2,22 +2,36 @@
 {
   flake = {
     homeModules.artur =
-      { config, ... }:
+      { pkgs, config, ... }:
       {
         xdg.enable = true;
         systemd.user.startServices = "sd-switch";
 
         programs.emacs = {
           enable = true;
+          package = pkgs.emacs-pgtk;
           extraPackages = epkgs: [
+            epkgs.treesit-grammars.with-all-grammars
             epkgs.tree-sitter-langs
             epkgs.nix-mode
             epkgs.nixfmt
+            epkgs.vertico
+            epkgs.marginalia
+            epkgs.corfu
+            epkgs.orderless
+            epkgs.magit
+            epkgs.diff-hl
+            epkgs.envrc
+            epkgs.ligature
           ];
           extraConfig = ''
-            	    (setq standard-intend 2)
-            	  '';
+            (org-babel-load-file
+              (expand-file-name "config.org" user-emacs-directory))
+          '';
         };
+
+        xdg.configFile."emacs/config.org".source =
+          config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/Documents/nixos-config/users/configs/emacs/config.org";
 
         programs.bash = {
           enable = true;
@@ -37,7 +51,17 @@
           configPath = "${config.xdg.configHome}/mozilla/firefox";
         };
 
-        programs.alacritty.enable = true;
+        programs.alacritty = {
+          enable = true;
+          settings = {
+            font = {
+              normal = {
+                family = "FiraCode Nerd Font";
+                style = "Regular";
+              };
+            };
+          };
+        };
 
         programs.direnv.enable = true;
         programs.starship = {

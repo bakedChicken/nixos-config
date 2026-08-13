@@ -449,7 +449,6 @@
                   self.nixosModules.sunshine
                   ({ pkgs, ... }: {
                     networking.hostName = "nixos-development-environment";
-                    networking.firewall.allowedTCPPorts = [ 3389 ];
 
                     fonts.packages = with pkgs; [
                       nerd-fonts.fira-code

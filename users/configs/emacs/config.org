@@ -1,0 +1,164 @@
+#+TITLE: My GNU Emacs Config
+#+AUTHOR: Artur Luppov
+#+DESCRIPTION: NixOS Powered Emacs config
+#+STARTUP: showeverything
+
+* UI configuration
+** Turn off autosave files
+
+#+begin_src emacs-lisp
+  (setq auto-save-default nil)
+  (setq make-backup-files nil)
+#+end_src
+
+** Turn off headbars
+
+#+begin_src emacs-lisp
+  (menu-bar-mode -1)
+  (scroll-bar-mode -1)
+  (tool-bar-mode -1)
+#+end_src
+
+** Fonts
+
+#+begin_src emacs-lisp
+  (let ((mono-spaced-font "FiraCode Nerd Font")
+      (proportionately-spaced-font "Sans"))
+  (set-face-attribute 'default nil :family mono-spaced-font :height 125)
+  (set-face-attribute 'fixed-pitch nil :family mono-spaced-font :height 1.0)
+  (set-face-attribute 'variable-pitch nil :family proportionately-spaced-font :height 1.0))
+#+end_src
+
+** Display Line Numbers
+
+#+begin_src emacs-lisp
+  (global-display-line-numbers-mode 1)
+  (global-visual-line-mode t)
+  (setq next-line-add-newlines t) ; Add new line in the end of each buffer during save
+  (column-number-mode 1)
+#+end_src
+
+** Enable some mods by default
+
+#+begin_src emacs-lisp
+  (delete-selection-mode 1)    ; Replaces selected text on paste
+  (global-auto-revert-mode 1)  ; Automatically reloads files from disk
+  (show-paren-mode 1)          ; Highlights parentheses
+#+end_src
+
+** Indentation
+
+#+begin_src emacs-lisp
+  (setq standard-indent 2)
+  (setq indent-tabs-mode nil)
+#+end_src
+
+* Built-in Packages Configuration
+** Savehist
+
+#+begin_src emacs-lisp
+  (use-package savehist
+    :ensure nil
+    :hook (after-init . savehist-mode))
+#+end_src
+
+** Dired
+
+#+begin_src emacs-lisp
+  (use-package dired
+    :ensure nil
+    :commands (dired)
+    :hook (dired-mode . hl-line-mode) ; enable current-line highlighting
+    :config
+      (setq delete-by-moving-to-trash t)
+      (setq ls-lisp-dirs-first t)
+      (setq ls-lisp-use-insert-directory-program nil))
+#+end_src
+
+** Org Mode
+
+#+begin_src emacs-lisp
+  (setq org-support-shift-select 1)
+#+end_src
+
+* External Packages
+** Vertico
+
+Vertical layout for the minibuffer
+
+#+begin_src emacs-lisp
+  (use-package vertico
+    :hook (after-init . vertico-mode))
+#+end_src
+
+** Marginalia
+
+Provide basic description for commands and functions
+
+#+begin_src emacs-lisp
+  (use-package marginalia
+    :hook (after-init . marginalia-mode))
+#+end_src
+
+** Orderless
+
+Fuzzy search commands in the minibuffer
+
+#+begin_src emacs-lisp
+  (use-package orderless
+    :config
+    (setq completion-styles '(orderless basic))
+    (setq completion-category-defaults nil)
+    (setq completion-category-overrides nil))
+#+end_src
+
+** Corfu
+
+Popup autocompletion for the buffer
+
+#+begin_src emacs-lisp
+  (use-package corfu
+    :hook (after-init . global-corfu-mode)
+    :bind (:map corfu-map ("<tab>" . corfu-complete))
+    :config
+    (setq corfu-cycle t)
+    (corfu-popupinfo-mode 1))
+#+end_src
+
+** Direnv
+
+#+begin_src emacs-lisp
+  (use-package envrc
+    :if (executable-find "direnv")
+    :hook (after-init . envrc-global-mode)
+    :config
+    (setq envrc-debug t))
+#+end_src
+
+** Magit
+
+#+begin_src emacs-lisp
+  (use-package magit)
+#+end_src
+
+With diff-hl tool to show changed lines in the buffer
+
+#+begin_src emacs-lisp
+  (use-package diff-hl
+    :hook
+    (magit-pre-refresh . diff-hl-magit-pre-refresh)
+    (magit-post-refresh . diff-hl-magit-post-refresh)
+    :config
+    (global-diff-hl-mode 1))
+#+end_src
+
+* Eglot
+** Nix
+
+#+begin_src emacs-lisp
+  (use-package eglot
+    :hook
+    (eglot-managed-mode . eglot-inlay-hints-mode)
+    (before-save . eglot-format)
+    (prog-mode . eglot-ensure))
+#+end_src

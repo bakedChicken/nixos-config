@@ -1,19 +1,13 @@
-{ inputs, ... }:
+{ self, ... }:
 {
   flake.nixosModules = {
-    xrdp = {
+    xserver = {
       services.xrdp = {
         enable = true;
         openFirewall = true;
         audio.enable = true;
         defaultWindowManager = "startplasma-x11";
       };
-    };
-
-    xserver = {
-      imports = [
-        inputs.self.nixosModules.xrdp
-      ];
 
       services.xserver = {
         enable = true;
@@ -22,9 +16,25 @@
       };
     };
 
+    wayland =
+      { pkgs, ... }:
+      {
+        networking.firewall.allowedTCPPorts = [ 3389 ];
+        services.displayManager.sddm.wayland.enable = true;
+
+        environment.systemPackages = with pkgs; [
+          wayland-utils
+          wl-clipboard
+        ];
+      };
+
     kde-desktop =
       { pkgs, ... }:
       {
+        imports = [
+          self.nixosModules.wayland
+        ];
+
         services.desktopManager.plasma6.enable = true;
         services.displayManager.sddm.enable = true;
 
@@ -41,19 +51,6 @@
 
         environment.systemPackages = [
           pkgs.kdePackages.kzones
-        ];
-      };
-
-    wayland =
-      { pkgs, ... }:
-      {
-        services = {
-          displayManager.sddm.wayland.enable = true;
-        };
-
-        environment.systemPackages = with pkgs; [
-          wayland-utils
-          wl-clipboard
         ];
       };
   };
