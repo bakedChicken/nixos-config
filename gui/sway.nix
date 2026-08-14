@@ -10,8 +10,8 @@
         terminal = "alacritty";
         output = {
           Virtual-1 = {
-            mode = "--custom 5120x2160@60Hz";
-            scale = "1.5";
+            mode = "--custom 3024x1890@60Hz";
+            scale = "2";
           };
         };
       };

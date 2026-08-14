@@ -105,17 +105,11 @@
               formatOnSave = true;
               inlayHints.enable = true;
             };
-            vim.theme = {
-              enable = true;
-              name = "catppuccin";
-              style = "auto";
-            };
             vim.visuals.indent-blankline.enable = true;
             vim.visuals.nvim-cursorline.enable = true;
             vim.visuals.rainbow-delimiters.enable = true;
             vim.statusline.lualine.enable = true;
             vim.languages.nix.enable = true;
-            vim.languages.go.enable = true;
             vim.autocomplete.blink-cmp.enable = true;
             vim.git.enable = true;
             vim.autopairs.nvim-autopairs.enable = true;
