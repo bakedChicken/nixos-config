@@ -1,24 +1,12 @@
 { inputs, ... }:
 {
-  imports = [
-    inputs.home-manager.flakeModules.home-manager
-  ];
-
   flake = {
-    homeModules.niri-wm =
-      { pkgs, ... }:
-      {
-        programs.noctalia-shell.enable = true;
-        programs.fuzzel.enable = true;
-        programs.alacritty.enable = true;
-        programs.swaylock.enable = true;
-
-        home.pointerCursor = {
-          package = pkgs.kdePackages.breeze;
-          name = "breeze_cursors";
-          size = 16;
-        };
-      };
+    homeModules.niri-wm = {
+      programs.noctalia-shell.enable = true;
+      programs.fuzzel.enable = true;
+      programs.alacritty.enable = true;
+      programs.swaylock.enable = true;
+    };
 
     nixosModules.niri-wm =
       { pkgs, ... }:
@@ -28,8 +16,6 @@
           "/share/xdg-desktop-portal"
         ];
 
-        services.displayManager.ly.enable = true;
-        services.displayManager.defaultSession = "niri";
         programs.niri.enable = true;
 
         environment.systemPackages = with pkgs; [

@@ -1,6 +1,6 @@
 { self, ... }:
 {
-  flake.homeModules.sway = { pkgs, ... }: {
+  flake.homeModules.sway = {
     wayland.windowManager.sway = {
       enable = true;
       systemd.enable = true;
@@ -10,8 +10,8 @@
         terminal = "alacritty";
         output = {
           Virtual-1 = {
-            mode = "--custom 3024x1890@60Hz";
-            scale = "2";
+            mode = "--custom 5120x2160@60Hz";
+            scale = "1.5";
           };
         };
       };
@@ -20,11 +20,11 @@
 
   flake.nixosModules.sway = { pkgs, ... }: {
     security.polkit.enable = true;
-    environment.loginShellInit = ''
-      [[ "$(tty)" == /dev/tty1 ]] && sway
-    '';
+    programs.sway = {
+      enable = true;
+      wrapperFeatures.gtk = true;
+    };
     environment.systemPackages = with pkgs; [
-      wl-clipboard
       mako
     ];
     home-manager.users.artur.imports = [

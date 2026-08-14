@@ -10,19 +10,30 @@
       };
     };
 
-    nixosModules.wm = { pkgs, ... }: {
-      services.getty = {
-        autologinUser = "artur";
-      };
-      services.greetd = {
+    nixosModules.wm = {
+      services.displayManager = {
         enable = true;
-        settings = {
-          default_session = {
-            command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd sway";
-            user = "artur";
-          };
+        sddm = {
+          enable = true;
+          wayland.enable = true;
+        };
+        autoLogin = {
+          enable = true;
+          user = "artur";
         };
       };
+
+      xdg.portal = {
+        enable = true;
+        wlr.enable = true;
+      };
+
+      services.pipewire = {
+        enable = true;
+        alsa.enable = true;
+        pulse.enable = true;
+      };
+
       home-manager.users.artur.imports = [
         self.homeModules.wm
       ];

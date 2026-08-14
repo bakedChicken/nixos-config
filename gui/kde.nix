@@ -16,17 +16,10 @@
       };
     };
 
-    wayland =
-      { pkgs, ... }:
-      {
-        networking.firewall.allowedTCPPorts = [ 3389 ];
-        services.displayManager.sddm.wayland.enable = true;
-
-        environment.systemPackages = with pkgs; [
-          wayland-utils
-          wl-clipboard
-        ];
-      };
+    wayland = {
+      networking.firewall.allowedTCPPorts = [ 3389 ];
+      services.displayManager.sddm.wayland.enable = true;
+    };
 
     kde-desktop =
       { pkgs, ... }:
