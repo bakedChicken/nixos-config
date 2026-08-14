@@ -1,0 +1,100 @@
+#+TITLE: My NixOS homelab
+#+AUTHOR: Artur Luppov
+#+DESCRIPTION: NixOS-powered homelab configuration
+
+* Table of Contents :TOC:
+- [[#prelude][Prelude]]
+- [[#kubernetes-cluster][Kubernetes cluster]]
+  - [[#installation-and-first-boot][Installation and first-boot]]
+  - [[#mdns][mDNS]]
+  - [[#workload][Workload]]
+- [[#personal-computer-configuration][Personal Computer configuration]]
+  - [[#basic-configuration][Basic configuration]]
+  - [[#hyprland][Hyprland]]
+  - [[#kde][KDE]]
+  - [[#emacs][Emacs]]
+
+* Prelude
+
+This repository contains the configuration files for my whole homelab. It deploys a 3-node HA Kubernetes (k3s) cluster with its dependencies, as well as it's used to configure my personal development machine.
+
+I'm generally trying to avoid using Nix as a /programming/ language, and only use it as a declarative configuration language. No loops, no conditions, no custom functions. This is mainly because I want to avoid being autistically overwhelmed.
+
+* Kubernetes cluster
+
+Kubernetes cluster is hosted on 3 virtual machines (Hyper-V). I use k3s, btw. The nodes are running DualStack IPv4 + IPv6 for now, but I'm trying to go IPv6-mostly.
+
+On top of the cluster I install Cilium as a CNI and service mesh. Additionally, I have a TrueNAS machine in my local network, which I'm using as a CSI. I have a 10Gbps connection between the nodes and the TrueNAS server, so it's interesting to compare the performance of NVMe-oF vs iSCSI vs NFS.
+
+Configuration of the VMs:
++ CPU: 8 cores
++ RAM: 16384 MB
++ Disk Space: 32 GB
+
+| VM Name    |  IPv4 address | IPv6 address | Role                    |
+|------------+---------------+--------------+-------------------------|
+| k8s-node-1 | 172.16.30.201 | TBD          | k3s server + k3s worker |
+| k8s-node-2 | 172.16.30.202 | TBD          | k3s server + k3s worker |
+| k8s-node-3 | 172.16.30.203 | TBD          | k3s server + k3s worker |
+| opaque-pi  |           TBD | TBD          | k3s worker              |
+| transp-pi  |           TBD | TBD          | k3s worker              |
+
+** Installation and first-boot
+
+My TrueNAS machine runs a Docker instance of netboot.xyz, which I use for iPXE network booting. After VMs are created and started, it's enough to boot the latest NixOS installer image and change the password for the live user.
+After that, I use nixos-anywhere to deploy the configuration for each respective node, using the following command:
+
+#+begin_example bash
+nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-1 --target-host nixos@<IP-1>
+#+end_example
+
+If you have a running Linux distro, ~--copy-host-keys~ will make sure that your ~/etc/ssh/ssh_host_ed25519~ private and public keys are persisted. Not the ~~/.ssh~ though. This is important, because agenix relies on those files to encrypt and decrypt secrets.
+
+After the deployment is done, VMs should reboot and launch a ready-to-use NixOS instance. Consequent chages could be deployed using the following command
+
+#+begin_example bash
+sudo nixos-rebuild switch --flake .#k8s-node-1 --target-host artur@k8s-node-1.local --elevate=sudo --ask-elevate-password
+#+end_example
+
+Or simply:
+
+#+begin_example bash
+deploy .#k8s-node-1
+#+end_example
+
+** mDNS
+
+I'm using avahi-daemon to advertize mDNS records in my local network, but it works reliably only when nodes are using IPv4. IPv6 recive 2 GUA SLAAC addresses, one of which is dynamic, and it's kind of hard to predict which address the client will resolve via mDNS query. Things are getting even worse, considering that I'm trying to deploy ULA on my local network, just to avoid exposing the cluster to the global internet. Because it's hard to predict which mDNS address is going to be resolved, etcd instance of k3s is freaking out, which is not surprising, because they require a static IP address.
+
+** Workload
+
+I want to introduce basic cluster resources that should be configured via NixOS, because they either require OS-level configurations (network, storage) or they are neccessary for cluster to operate normally.
+
+I'm going to track the service list here:
+
++ kube-vip
++ truenas-scale-csi provisioner
++ certbot
++ flux
++ gateway-api
++ cillium
+
+
+* Personal Computer configuration
+
+** Basic configuration
+
+TBD
+
+** Hyprland
+
+TBD
+
+** KDE
+
+TBD
+
+** Emacs
+
+TBD
+

@@ -17,19 +17,26 @@
             epkgs.nixfmt
             epkgs.vertico
             epkgs.marginalia
-            epkgs.corfu
             epkgs.orderless
+            epkgs.corfu
             epkgs.magit
             epkgs.diff-hl
             epkgs.envrc
             epkgs.ligature
+            epkgs.company
+            epkgs.toc-org
+            epkgs.org-preview-html
+            epkgs.doom-themes
           ];
           extraConfig = ''
+            (org-babel-load-file
+              (expand-file-name "early-init.org" user-emacs-directory))
             (org-babel-load-file
               (expand-file-name "config.org" user-emacs-directory))
           '';
         };
 
+        xdg.configFile."emacs/early-init.org".source = ./configs/emacs/early-init.org;
         xdg.configFile."emacs/config.org".source =
           config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/Documents/nixos-config/users/configs/emacs/config.org";
 
@@ -119,10 +126,6 @@
     nixosModules.artur =
       { pkgs, ... }:
       {
-        #environment.variables = {
-        #  EDITOR = "nvim";
-        #  VISUAL = "nvim";
-        #};
         users.users.artur = {
           description = "Artur Luppov";
           isNormalUser = true;

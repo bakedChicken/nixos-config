@@ -2,8 +2,7 @@
 {
   flake = {
     homeModules = {
-      hyprland-home = { pkgs, lib, ... }: {
-        programs.kitty.enable = true; # required for the default Hyprland config
+      hyprland-home = {
         wayland.windowManager.hyprland = {
           enable = true;
           configType = "lua";
@@ -26,18 +25,15 @@
     };
 
     nixosModules = {
-      hyprland =
-        { pkgs, ... }:
-        {
-          programs.hyprland = {
-            enable = true;
-            withUWSM = true;
-            xwayland.enable = true;
-          };
-          home-manager.users.artur.imports = [
-            self.homeModules.hyprland-home
-          ];
+      hyprland = {
+        programs.hyprland = {
+          enable = true;
+          xwayland.enable = true;
         };
+        home-manager.users.artur.imports = [
+          self.homeModules.hyprland-home
+        ];
+      };
     };
   };
 }

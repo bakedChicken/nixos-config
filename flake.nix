@@ -74,14 +74,11 @@
             formatter = pkgs.nixfmt-tree;
 
             devShells.default = pkgs.mkShellNoCC {
-              nativeBuildInputs = [ config.agenix-rekey.package ];
-
               packages = with pkgs; [
                 inputs'.deploy-rs.packages.default
+                config.agenix-rekey.package
                 nixfmt-tree
                 nixd
-                nil
-                yq
               ];
             };
           };

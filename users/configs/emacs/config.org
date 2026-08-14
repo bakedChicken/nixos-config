@@ -3,6 +3,28 @@
 #+DESCRIPTION: NixOS Powered Emacs config
 #+STARTUP: showeverything
 
+* Table of Contents :TOC:
+- [[#ui-configuration][UI configuration]]
+  - [[#turn-off-autosave-files][Turn off autosave files]]
+  - [[#display-line-numbers-and-enable-some-mods-by-default][Display Line Numbers and Enable some mods by default]]
+  - [[#indentation-and-text-properties][Indentation and Text properties]]
+  - [[#load-theme][Load theme]]
+  - [[#hooks][Hooks]]
+- [[#built-in-packages-configuration][Built-in Packages Configuration]]
+  - [[#savehist][Savehist]]
+  - [[#dired][Dired]]
+  - [[#org-mode][Org Mode]]
+- [[#external-packages][External Packages]]
+  - [[#vertico][Vertico]]
+  - [[#marginalia][Marginalia]]
+  - [[#orderless][Orderless]]
+  - [[#corfu][Corfu]]
+  - [[#company][Company]]
+  - [[#direnv][Direnv]]
+  - [[#magit][Magit]]
+- [[#eglot][Eglot]]
+  - [[#nix][Nix]]
+
 * UI configuration
 ** Turn off autosave files
 
@@ -11,46 +33,36 @@
   (setq make-backup-files nil)
 #+end_src
 
-** Turn off headbars
-
-#+begin_src emacs-lisp
-  (menu-bar-mode -1)
-  (scroll-bar-mode -1)
-  (tool-bar-mode -1)
-#+end_src
-
-** Fonts
-
-#+begin_src emacs-lisp
-  (let ((mono-spaced-font "FiraCode Nerd Font")
-      (proportionately-spaced-font "Sans"))
-  (set-face-attribute 'default nil :family mono-spaced-font :height 125)
-  (set-face-attribute 'fixed-pitch nil :family mono-spaced-font :height 1.0)
-  (set-face-attribute 'variable-pitch nil :family proportionately-spaced-font :height 1.0))
-#+end_src
-
-** Display Line Numbers
+** Display Line Numbers and Enable some mods by default
 
 #+begin_src emacs-lisp
   (global-display-line-numbers-mode 1)
   (global-visual-line-mode t)
-  (setq next-line-add-newlines t) ; Add new line in the end of each buffer during save
   (column-number-mode 1)
-#+end_src
-
-** Enable some mods by default
-
-#+begin_src emacs-lisp
   (delete-selection-mode 1)    ; Replaces selected text on paste
   (global-auto-revert-mode 1)  ; Automatically reloads files from disk
   (show-paren-mode 1)          ; Highlights parentheses
 #+end_src
 
-** Indentation
+** Indentation and Text properties
 
 #+begin_src emacs-lisp
   (setq standard-indent 2)
   (setq indent-tabs-mode nil)
+  (setq next-line-add-newlines t) ; Add new line in the end of each buffer during save
+  (setq require-final-newline t)
+#+end_src
+
+** Load theme
+
+#+begin_src emacs-lisp
+  (load-theme 'doom-gruvbox)
+#+end_src
+
+** Hooks
+
+#+begin_src emacs-lisp
+  (add-hook 'before-save-hook 'delete-trailing-whitespace)
 #+end_src
 
 * Built-in Packages Configuration
@@ -72,6 +84,8 @@
     :config
       (setq delete-by-moving-to-trash t)
       (setq ls-lisp-dirs-first t)
+      (setq ls-lisp-use-string-collate nil)
+      (setq ls-lisp-UCA-like-collation nil)
       (setq ls-lisp-use-insert-directory-program nil))
 #+end_src
 
@@ -79,6 +93,7 @@
 
 #+begin_src emacs-lisp
   (setq org-support-shift-select 1)
+  (add-hook 'org-mode-hook 'toc-org-mode)
 #+end_src
 
 * External Packages
@@ -114,7 +129,7 @@ Fuzzy search commands in the minibuffer
 
 ** Corfu
 
-Popup autocompletion for the buffer
+Popup autocompletion for the minibuffer
 
 #+begin_src emacs-lisp
   (use-package corfu
@@ -125,14 +140,22 @@ Popup autocompletion for the buffer
     (corfu-popupinfo-mode 1))
 #+end_src
 
+** Company
+
+Popup autocompletion for the main buffer
+
+#+begin_src emacs-lisp
+  (use-package company
+    :init (global-company-mode))
+#+end_src
+
 ** Direnv
 
 #+begin_src emacs-lisp
   (use-package envrc
+    :defer t
     :if (executable-find "direnv")
-    :hook (after-init . envrc-global-mode)
-    :config
-    (setq envrc-debug t))
+    :hook (dired-mode . envrc-global-mode))
 #+end_src
 
 ** Magit
@@ -162,3 +185,4 @@ With diff-hl tool to show changed lines in the buffer
     (before-save . eglot-format)
     (prog-mode . eglot-ensure))
 #+end_src
+
