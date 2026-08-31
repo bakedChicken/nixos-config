@@ -5,6 +5,7 @@
 
 * Table of Contents :TOC:
 - [[#ui-configuration][UI configuration]]
+  - [[#enable-lexical-binding][Enable Lexical Binding]]
   - [[#turn-off-autosave-files][Turn off autosave files]]
   - [[#display-line-numbers-and-enable-some-mods-by-default][Display Line Numbers and Enable some mods by default]]
   - [[#indentation-and-text-properties][Indentation and Text properties]]
@@ -26,6 +27,13 @@
   - [[#nix][Nix]]
 
 * UI configuration
+
+** Enable Lexical Binding
+
+#+begin_src emacs-lisp :tangle yes :comments no
+;;; -*- lexical-binding: t -*-
+#+end_src
+
 ** Turn off autosave files
 
 #+begin_src emacs-lisp
@@ -56,7 +64,8 @@
 ** Load theme
 
 #+begin_src emacs-lisp
-  (load-theme 'doom-gruvbox)
+  (add-to-list 'custom-theme-load-path (expand-file-name "themes" user-emacs-directory))
+  (load-theme 'noctalia t)
 #+end_src
 
 ** Hooks

@@ -4,7 +4,6 @@
     homeModules.niri-wm = {
       programs.noctalia-shell.enable = true;
       programs.fuzzel.enable = true;
-      programs.alacritty.enable = true;
       programs.swaylock.enable = true;
     };
 
@@ -22,7 +21,7 @@
           xwayland-satellite
         ];
 
-        home-manager.users.nobile.imports = [
+        home-manager.users.artur.imports = [
           inputs.noctalia-flake.homeModules.default
           inputs.self.homeModules.niri-wm
         ];

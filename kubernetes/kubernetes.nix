@@ -8,6 +8,10 @@
   flake = {
     diskoConfigurations = {
       kubernetes-node-disk = {
+        imports = [
+          inputs.disko.nixosModules.default
+        ];
+        
         disko.devices.disk.main = {
           device = "/dev/sda";
           type = "disk";
@@ -246,10 +250,6 @@
         { ... }:
         inputs.nixpkgs.lib.nixosSystem {
           modules = [
-            inputs.disko.nixosModules.default
-            inputs.agenix.nixosModules.default
-            inputs.agenix-rekey.nixosModules.default
-            self.diskoConfigurations.kubernetes-node-disk
             self.nixosModules.common-nix-module
             self.nixosModules.common-kubernetes-module
             self.nixosModules.hyperv-vm
@@ -267,9 +267,6 @@
         { ... }:
         inputs.nixpkgs.lib.nixosSystem {
           modules = [
-            inputs.disko.nixosModules.default
-            inputs.agenix.nixosModules.default
-            inputs.agenix-rekey.nixosModules.default
             self.diskoConfigurations.kubernetes-node-disk
             self.nixosModules.common-nix-module
             self.nixosModules.common-kubernetes-module
@@ -288,9 +285,6 @@
         { ... }:
         inputs.nixpkgs.lib.nixosSystem {
           modules = [
-            inputs.disko.nixosModules.default
-            inputs.agenix.nixosModules.default
-            inputs.agenix-rekey.nixosModules.default
             self.diskoConfigurations.kubernetes-node-disk
             self.nixosModules.common-nix-module
             self.nixosModules.common-kubernetes-module

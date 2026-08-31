@@ -26,9 +26,10 @@
             epkgs.company
             epkgs.toc-org
             epkgs.org-preview-html
-            epkgs.doom-themes
           ];
           extraConfig = ''
+            ;;; -*- lexical-binding: t -*-
+
             (org-babel-load-file
               (expand-file-name "early-init.org" user-emacs-directory))
             (org-babel-load-file
@@ -37,8 +38,8 @@
         };
 
         xdg.configFile."emacs/early-init.org".source = ./configs/emacs/early-init.org;
-        xdg.configFile."emacs/config.org".source =
-          config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/Documents/nixos-config/users/configs/emacs/config.org";
+        xdg.configFile."emacs/config.org".source = ./configs/emacs/config.org;
+        # config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/Documents/nixos-config/users/configs/emacs/config.org";
 
         programs.bash = {
           enable = true;
@@ -61,6 +62,7 @@
         programs.alacritty = {
           enable = true;
           settings = {
+            general.import = [ "themes/noctalia.toml" ];
             font = {
               normal = {
                 family = "FiraCode Nerd Font";

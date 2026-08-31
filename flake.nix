@@ -3,6 +3,13 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
 
+    umbriel.url = "git+https://github.com/noctalia-dev/umbriel";
+
+    noctalia = {
+      url = "github:noctalia-dev/noctalia";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -88,6 +95,10 @@
         flake = {
           diskoConfigurations = {
             default = {
+              imports = [
+                disko.nixosModules.default
+              ];
+
               disko.devices.disk.main = {
                 type = "disk";
                 device = "/dev/sda";
@@ -148,9 +159,39 @@
               virtualisation.hypervGuest.enable = true;
             };
 
+            common-bloat-module = { pkgs, ... }: {
+              imports = [
+                home-manager.nixosModules.default
+              ];
+
+              fonts.packages = with pkgs; [
+                nerd-fonts.fira-code
+              ];
+
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+              home-manager.users.artur = {
+                imports = [
+                  nvf.homeManagerModules.default
+                  self.homeModules.artur
+                ];
+                home = {
+                  username = "artur";
+                  homeDirectory = "/home/artur";
+                  stateVersion = "25.11";
+                  preferXdgDirectories = true;
+                };
+              };
+            };
+
             common-nix-module =
               { pkgs, config, ... }:
               {
+                imports = [
+                  agenix.nixosModules.default
+                  agenix-rekey.nixosModules.default
+                ];
+
                 nix = {
                   settings = {
                     experimental-features = [
@@ -208,52 +249,48 @@
                 time.timeZone = "Europe/Vienna";
                 i18n.defaultLocale = "en_US.UTF-8";
 
-                nixpkgs.hostPlatform = "x86_64-linux";
                 nixpkgs.config.allowUnfree = true;
                 system.stateVersion = "25.11";
               };
           };
 
           nixosConfigurations = {
-            nixos-development-environment = withSystem "x86_64-linux" (
-              { ... }:
+            nixos-development-environment-aarch64 = withSystem "aarch64-linux" (
+              { system, ... }:
               nixpkgs.lib.nixosSystem {
                 modules = [
-                  disko.nixosModules.default
-                  home-manager.nixosModules.default
-                  agenix.nixosModules.default
-                  agenix-rekey.nixosModules.default
                   self.diskoConfigurations.default
                   self.nixosModules.common-nix-module
+                  self.nixosModules.common-bloat-module
+                  self.nixosModules.artur
+                  self.nixosModules.wm
+                  self.nixosModules.umbriel
+                  self.nixosModules.noctalia
+                  {
+                    networking.hostName = "nixos-development-environment-aarch64";
+                    nixpkgs.hostPlatform = system;
+                  }
+                ];
+              }
+            );
+
+            nixos-development-environment = withSystem "x86_64-linux" (
+              { system, ... }:
+              nixpkgs.lib.nixosSystem {
+                modules = [
+                  self.diskoConfigurations.default
+                  self.nixosModules.common-nix-module
+                  self.nixosModules.common-bloat-module
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
                   self.nixosModules.wm
                   self.nixosModules.sway
                   self.nixosModules.sunshine
-                  ({ pkgs, ... }: {
+                  {
                     networking.hostName = "nixos-development-environment";
-
-                    fonts.packages = with pkgs; [
-                      nerd-fonts.fira-code
-                    ];
-
-                    home-manager.useGlobalPkgs = true;
-                    home-manager.useUserPackages = true;
-                    home-manager.users.artur = {
-                      imports = [
-                        nvf.homeManagerModules.default
-                        self.homeModules.artur
-                      ];
-                      home = {
-                        username = "artur";
-                        homeDirectory = "/home/artur";
-                        stateVersion = "25.11";
-                        preferXdgDirectories = true;
-                      };
-                    };
-
+                    nixpkgs.hostPlatform = system;
                     age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
-                  })
+                  }
                 ];
               }
             );

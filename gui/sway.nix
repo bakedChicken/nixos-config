@@ -20,6 +20,12 @@
 
   flake.nixosModules.sway = { pkgs, ... }: {
     security.polkit.enable = true;
+
+    xdg.portal = {
+      enable = true;
+      wlr.enable = true;
+    };
+
     programs.sway = {
       enable = true;
       wrapperFeatures.gtk = true;

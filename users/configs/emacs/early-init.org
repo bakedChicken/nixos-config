@@ -4,6 +4,10 @@
 * UI configuration
 ** Turn off headbars
 
+#+begin_src emacs-lisp :tangle yes :comments no
+;;; -*- lexical-binding: t -*-
+#+end_src
+
 #+begin_src emacs-lisp
   (menu-bar-mode -1)
   (scroll-bar-mode -1)
