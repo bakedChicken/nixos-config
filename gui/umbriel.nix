@@ -24,6 +24,9 @@
               focus = {
                 follows_mouse = true;
               };
+              touchpad = {
+                natural_scroll = true;
+              };
               mouse = {
                 natural_scroll = true;
               };
@@ -33,13 +36,18 @@
               "Mod+Tab" = "scratchpad-focus-next";
               "Mod+Q" = "window-close";
               "Mod+D" = "spawn:noctalia msg panel-toggle launcher";
-              "Mod+F" = "window-set-width:1.0";
+              "Mod+F" = "spawn:firefox";
+              "Mod+E" = "spawn:emacs";
               "Mod+R" = "window-cycle-width";
               "Mod+Shift+R" = "window-cycle-width-back";
-              "Mod+WheelUp" = "window-focus-left";
-              "Mod+WheelDown" = "window-focus-right";
-              "Mod+Shift+WheelUp" = "column-move-left";
-              "Mod+Shift+WheelDown" = "column-move-right";
+              "Mod+H" = "window-focus-left";
+              "Mod+Shift+H" = "column-move-left";
+              "Mod+J" = "window-focus-or-workspace-down";
+              "Mod+Shift+J" = "window-move-down";
+              "Mod+K" = "window-focus-or-workspace-up";
+              "Mod+Shift+K" = "window-move-up";
+              "Mod+L" = "window-focus-right";
+              "Mod+Shift+L" = "column-move-right";
               "Mod+P" = "window-toggle-pinned";
               "Mod+M" = "window-toggle-maximize-to-edges";
               "Mod+0" = "overview-toggle";

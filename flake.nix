@@ -3,7 +3,10 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
 
-    umbriel.url = "git+https://github.com/noctalia-dev/umbriel";
+    umbriel = {
+      url = "git+https://github.com/noctalia-dev/umbriel";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     noctalia = {
       url = "github:noctalia-dev/noctalia";
@@ -269,6 +272,7 @@
                   {
                     networking.hostName = "nixos-development-environment-aarch64";
                     nixpkgs.hostPlatform = system;
+                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
                   }
                 ];
               }
