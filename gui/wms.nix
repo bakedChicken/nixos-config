@@ -10,7 +10,7 @@
       };
     };
 
-    nixosModules.wm = {
+    nixosModules.wm = { pkgs, ... }: {
       services.displayManager = {
         enable = true;
         sddm = {
@@ -28,6 +28,11 @@
         alsa.enable = true;
         pulse.enable = true;
       };
+
+      environment.systemPackages = with pkgs; [
+        htop
+        wlr-randr
+      ];
 
       home-manager.users.artur.imports = [
         self.homeModules.wm
