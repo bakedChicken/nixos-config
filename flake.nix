@@ -79,7 +79,6 @@
           {
             pkgs,
             inputs',
-            config,
             ...
           }:
           {
@@ -88,7 +87,7 @@
             devShells.default = pkgs.mkShellNoCC {
               packages = with pkgs; [
                 inputs'.deploy-rs.packages.default
-                config.agenix-rekey.package
+                inputs'.agenix-rekey.packages.default
                 nixfmt-tree
                 nixd
               ];

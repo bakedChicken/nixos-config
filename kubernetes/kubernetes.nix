@@ -247,9 +247,10 @@
 
     nixosConfigurations = {
       k8s-node-1 = withSystem "x86_64-linux" (
-        { ... }:
+        { system, ... }:
         inputs.nixpkgs.lib.nixosSystem {
           modules = [
+            self.diskoConfigurations.kubernetes-node-disk
             self.nixosModules.common-nix-module
             self.nixosModules.common-kubernetes-module
             self.nixosModules.hyperv-vm
@@ -258,13 +259,14 @@
               networking.hostName = "k8s-node-1";
               services.k3s.clusterInit = true;
               age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBgayw+LEcOM0N62lRmY67rwsut5AlQzH7s30qi1/uKE";
+              nixpkgs.hostPlatform = system;
             }
           ];
         }
       );
 
       k8s-node-2 = withSystem "x86_64-linux" (
-        { ... }:
+        { system, ... }:
         inputs.nixpkgs.lib.nixosSystem {
           modules = [
             self.diskoConfigurations.kubernetes-node-disk
@@ -276,13 +278,14 @@
               networking.hostName = "k8s-node-2";
               services.k3s.serverAddr = "https://k8s-node-1.local:6443";
               age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILg/ncWfxWXZX4oLFq13dgzcNoOyurb+fkicj4E4G9MC";
+              nixpkgs.hostPlatform = system;
             }
           ];
         }
       );
 
       k8s-node-3 = withSystem "x86_64-linux" (
-        { ... }:
+        { system, ... }:
         inputs.nixpkgs.lib.nixosSystem {
           modules = [
             self.diskoConfigurations.kubernetes-node-disk
@@ -294,6 +297,7 @@
               networking.hostName = "k8s-node-3";
               services.k3s.serverAddr = "https://k8s-node-1.local:6443";
               age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICsEqPnBF3JpXgFLVa37SjdKyiOBAbrj1KDtb9dSH/44";
+              nixpkgs.hostPlatform = system;
             }
           ];
         }
