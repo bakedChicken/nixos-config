@@ -31,7 +31,6 @@
             epkgs.company
             epkgs.toc-org
             epkgs.org-preview-html
-            epkgs.vterm
             epkgs.agent-shell
           ];
           extraConfig = ''
@@ -104,26 +103,6 @@
         programs.fzf = {
           enable = true;
           enableBashIntegration = true;
-        };
-
-        programs.nvf = {
-          enable = true;
-          settings = {
-            vim.lsp = {
-              enable = true;
-              formatOnSave = true;
-              inlayHints.enable = true;
-            };
-            vim.visuals.indent-blankline.enable = true;
-            vim.visuals.nvim-cursorline.enable = true;
-            vim.visuals.rainbow-delimiters.enable = true;
-            vim.statusline.lualine.enable = true;
-            vim.languages.nix.enable = true;
-            vim.languages.clang.enable = true;
-            vim.autocomplete.blink-cmp.enable = true;
-            vim.git.enable = true;
-            vim.autopairs.nvim-autopairs.enable = true;
-          };
         };
       };
 
