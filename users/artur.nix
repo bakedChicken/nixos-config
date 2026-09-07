@@ -7,6 +7,11 @@
         xdg.enable = true;
         systemd.user.startServices = "sd-switch";
 
+        home.packages = with pkgs; [
+          codex
+          claude-code
+        ];
+
         programs.emacs = {
           enable = true;
           package = pkgs.emacs-pgtk;
@@ -27,6 +32,7 @@
             epkgs.toc-org
             epkgs.org-preview-html
             epkgs.vterm
+            epkgs.agent-shell
           ];
           extraConfig = ''
             ;;; -*- lexical-binding: t -*-
