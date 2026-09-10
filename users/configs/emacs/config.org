@@ -99,10 +99,19 @@
 #+end_src
 
 ** Org Mode
-
+*** Table of contents
 #+begin_src emacs-lisp
   (setq org-support-shift-select 1)
   (add-hook 'org-mode-hook 'toc-org-mode)
+#+end_src
+
+*** SQLite evaluation in Org Mode
+#+begin_src emacs-lisp
+  (org-babel-do-load-languages
+     'org-babel-load-languages (quote ((emacs-lisp . t)
+  				     (sqlite . t))))
+
+  (setq org-confirm-babel-evaluate nil)
 #+end_src
 
 * External Packages
@@ -194,4 +203,3 @@ With diff-hl tool to show changed lines in the buffer
     (before-save . eglot-format)
     (prog-mode . eglot-ensure))
 #+end_src
-
