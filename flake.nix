@@ -66,6 +66,7 @@
           ./users
           ./gui
           ./kubernetes
+          ./hyperv-gpu
         ];
 
         debug = true;
@@ -285,6 +286,7 @@
                   self.nixosModules.common-nix-module
                   self.nixosModules.common-bloat-module
                   self.nixosModules.hyperv-vm
+                  self.nixosModules.hyperv-gpu-pv
                   self.nixosModules.artur
                   self.nixosModules.wm
                   self.nixosModules.sway
