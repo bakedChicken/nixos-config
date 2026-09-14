@@ -5,7 +5,6 @@
     services.sunshine.capSysAdmin = true;
     services.sunshine.openFirewall = true;
     hardware.uinput.enable = true;
-
     users.users.artur.extraGroups = ["uinput"];
   };
 }
