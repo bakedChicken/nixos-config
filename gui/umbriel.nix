@@ -84,7 +84,6 @@
         programs.umbriel.enable = true;
         environment.systemPackages = with pkgs; [
           xwayland-satellite
-          wlr-randr
         ];
 
         home-manager.users.artur.imports = [

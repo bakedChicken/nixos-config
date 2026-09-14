@@ -30,7 +30,7 @@
       };
 
       environment.systemPackages = with pkgs; [
-        htop
+        yazi
         wlr-randr
       ];
 

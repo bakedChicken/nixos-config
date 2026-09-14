@@ -9,7 +9,9 @@
 
         home.packages = with pkgs; [
           codex
+          codex-acp
           claude-code
+          claude-agent-acp
         ];
 
         programs.emacs = {
