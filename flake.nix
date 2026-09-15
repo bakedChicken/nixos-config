@@ -286,9 +286,8 @@
                   self.nixosModules.common-bloat-module
                   self.nixosModules.hyperv-vm
                   self.nixosModules.artur
-                  self.nixosModules.wm
-                  self.nixosModules.sway
-                  self.nixosModules.sunshine
+                  self.nixosModules.xserver
+                  self.nixosModules.kde-desktop
                   {
                     networking.hostName = "nixos-development-environment";
                     nixpkgs.hostPlatform = system;
