@@ -66,7 +66,6 @@
           ./users
           ./gui
           ./kubernetes
-          ./hyperv-gpu
         ];
 
         debug = true;
