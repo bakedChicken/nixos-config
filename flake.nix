@@ -285,6 +285,7 @@
                   self.nixosModules.common-nix-module
                   self.nixosModules.common-bloat-module
                   self.nixosModules.hyperv-vm
+                  self.nixosModules.hyperv-gpu-pv
                   self.nixosModules.artur
                   self.nixosModules.xserver
                   self.nixosModules.kde-desktop

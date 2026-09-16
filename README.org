@@ -10,7 +10,7 @@
   - [[#workload][Workload]]
 - [[#personal-computer-configuration][Personal Computer configuration]]
   - [[#basic-configuration][Basic configuration]]
-  - [[#hyprland][Hyprland]]
+  - [[#umbriel][Umbriel]]
   - [[#kde][KDE]]
   - [[#emacs][Emacs]]
 
@@ -86,7 +86,7 @@ I'm going to track the service list here:
 
 TBD
 
-** Hyprland
+** Umbriel
 
 TBD
 

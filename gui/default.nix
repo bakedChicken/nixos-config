@@ -1,5 +1,6 @@
 {
   imports = [
+    ./hyperv-gpu.nix
     ./kde.nix
     ./noctalia.nix
     ./sunshine.nix
