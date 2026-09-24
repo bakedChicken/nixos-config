@@ -6,6 +6,6 @@
     services.sunshine.openFirewall = true;
     hardware.uinput.enable = true;
 
-    users.users.artur.extraGroups = [ "uinput" ];
+    users.users.artur.extraGroups = ["uinput"];
   };
 }

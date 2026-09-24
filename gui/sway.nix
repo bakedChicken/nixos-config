@@ -1,10 +1,9 @@
-{ self, ... }:
-{
+{self, ...}: {
   flake.homeModules.sway = {
     wayland.windowManager.sway = {
       enable = true;
       systemd.enable = true;
-      systemd.variables = [ "--all" ];
+      systemd.variables = ["--all"];
       config = {
         modifier = "Mod1";
         terminal = "alacritty";
@@ -18,7 +17,7 @@
     };
   };
 
-  flake.nixosModules.sway = { pkgs, ... }: {
+  flake.nixosModules.sway = {pkgs, ...}: {
     security.polkit.enable = true;
 
     xdg.portal = {

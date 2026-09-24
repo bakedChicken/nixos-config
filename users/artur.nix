@@ -1,134 +1,133 @@
-{ ... }:
-{
+{...}: {
   flake = {
-    homeModules.artur =
-      { pkgs, config, ... }:
-      {
-        xdg.enable = true;
-        systemd.user.startServices = "sd-switch";
+    homeModules.artur = {
+      pkgs,
+      config,
+      ...
+    }: {
+      xdg.enable = true;
+      systemd.user.startServices = "sd-switch";
 
-        home.packages = with pkgs; [
-          codex
-          codex-acp
-          claude-code
-          claude-agent-acp
+      home.packages = with pkgs; [
+        codex
+        codex-acp
+        claude-code
+        claude-agent-acp
+      ];
+
+      programs.emacs = {
+        enable = true;
+        package = pkgs.emacs-pgtk;
+        extraPackages = epkgs: [
+          epkgs.treesit-grammars.with-all-grammars
+          epkgs.tree-sitter-langs
+          epkgs.nix-mode
+          epkgs.nixfmt
+          epkgs.vertico
+          epkgs.marginalia
+          epkgs.orderless
+          epkgs.corfu
+          epkgs.magit
+          epkgs.diff-hl
+          epkgs.envrc
+          epkgs.ligature
+          epkgs.company
+          epkgs.toc-org
+          epkgs.org-preview-html
+          epkgs.agent-shell
         ];
+        extraConfig = ''
+          ;;; -*- lexical-binding: t -*-
 
-        programs.emacs = {
-          enable = true;
-          package = pkgs.emacs-pgtk;
-          extraPackages = epkgs: [
-            epkgs.treesit-grammars.with-all-grammars
-            epkgs.tree-sitter-langs
-            epkgs.nix-mode
-            epkgs.nixfmt
-            epkgs.vertico
-            epkgs.marginalia
-            epkgs.orderless
-            epkgs.corfu
-            epkgs.magit
-            epkgs.diff-hl
-            epkgs.envrc
-            epkgs.ligature
-            epkgs.company
-            epkgs.toc-org
-            epkgs.org-preview-html
-            epkgs.agent-shell
-          ];
-          extraConfig = ''
-            ;;; -*- lexical-binding: t -*-
+          (org-babel-load-file
+            (expand-file-name "early-init.org" user-emacs-directory))
+          (org-babel-load-file
+            (expand-file-name "config.org" user-emacs-directory))
+        '';
+      };
 
-            (org-babel-load-file
-              (expand-file-name "early-init.org" user-emacs-directory))
-            (org-babel-load-file
-              (expand-file-name "config.org" user-emacs-directory))
-          '';
+      xdg.configFile."emacs/early-init.org".source = ./configs/emacs/early-init.org;
+      xdg.configFile."emacs/config.org".source = ./configs/emacs/config.org;
+      # config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/Documents/nixos-config/users/configs/emacs/config.org";
+
+      programs.bash = {
+        enable = true;
+        historyControl = ["ignoredups"];
+      };
+
+      programs.git = {
+        enable = true;
+        settings.user = {
+          name = "Artur Luppov";
+          email = "artur.luppov@icloud.com";
         };
+      };
 
-        xdg.configFile."emacs/early-init.org".source = ./configs/emacs/early-init.org;
-        xdg.configFile."emacs/config.org".source = ./configs/emacs/config.org;
-        # config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/Documents/nixos-config/users/configs/emacs/config.org";
+      programs.firefox = {
+        enable = true;
+        configPath = "${config.xdg.configHome}/mozilla/firefox";
+      };
 
-        programs.bash = {
-          enable = true;
-          historyControl = [ "ignoredups" ];
-        };
-
-        programs.git = {
-          enable = true;
-          settings.user = {
-            name = "Artur Luppov";
-            email = "artur.luppov@icloud.com";
-          };
-        };
-
-        programs.firefox = {
-          enable = true;
-          configPath = "${config.xdg.configHome}/mozilla/firefox";
-        };
-
-        programs.alacritty = {
-          enable = true;
-          settings = {
-            general.import = [ "themes/noctalia.toml" ];
-            font = {
-              normal = {
-                family = "FiraCode Nerd Font";
-                style = "Regular";
-              };
+      programs.alacritty = {
+        enable = true;
+        settings = {
+          general.import = ["themes/noctalia.toml"];
+          font = {
+            normal = {
+              family = "FiraCode Nerd Font";
+              style = "Regular";
             };
           };
         };
+      };
 
-        programs.direnv.enable = true;
-        programs.starship = {
-          enable = true;
-          enableBashIntegration = true;
-          settings = {
-            hostname.ssh_only = false;
-            username.show_always = true;
-          };
-        };
-
-        programs.eza = {
-          enable = true;
-          enableBashIntegration = true;
-          colors = "always";
-          git = true;
-          icons = "always";
-          extraOptions = [
-            "--group-directories-first"
-            "--header"
-          ];
-        };
-
-        programs.fzf = {
-          enable = true;
-          enableBashIntegration = true;
+      programs.direnv.enable = true;
+      programs.starship = {
+        enable = true;
+        enableBashIntegration = true;
+        settings = {
+          hostname.ssh_only = false;
+          username.show_always = true;
         };
       };
 
-    nixosModules.artur =
-      { pkgs, ... }:
-      {
-        users.users.artur = {
-          description = "Artur Luppov";
-          isNormalUser = true;
-          extraGroups = [
-            "wheel"
-            "video"
-            "audio"
-            "networkmanager"
-          ];
-          hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
-          openssh.authorizedKeys.keys = [
-            # Public key of the main workstation
-            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2jPT/9sf897gTeV7skAMZe6a2vMaLXMwdp1QQDvbt4"
-            # Public key of the laptop
-            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCxojjMerhqRDdte4XWui7vOW5BmiTp4XM7ibgvYVvf2CPCFTlQUvFKk2GmvUvuEPWpKoQJi9eZ3W+r0JHGHMFc3FwGOC8PUGqO/fMFt0WfcAgXzS0whsxOmOqKWDCqRn71T8RqzjkMPEKB0+t1wLE5ikkDCmYuKxH3gM7oOwluE6V27Oq15dCU3JYjopwu0dVmqrgT7oYQfCTWgztQWuBlKQg/3PAICoxsyzjufbplxKX0GZ1lRdMIenGIvVFMs/nHvlVCcwGMYkBeq6A1DJZy5RUO/tUNWcH9NFD3MdL8Iboo6Gj9DAiuZWFr7mTRgq+cOA3FP97UrPgl58xEJ9bj"
-          ];
-          shell = pkgs.bash;
-        };
+      programs.eza = {
+        enable = true;
+        enableBashIntegration = true;
+        colors = "always";
+        git = true;
+        icons = "always";
+        extraOptions = [
+          "--group-directories-first"
+          "--header"
+        ];
       };
+
+      programs.fzf = {
+        enable = true;
+        enableBashIntegration = true;
+      };
+    };
+
+    nixosModules.artur = {pkgs, ...}: {
+      users.users.artur = {
+        description = "Artur Luppov";
+        isNormalUser = true;
+        extraGroups = [
+          "wheel"
+          "video"
+          "audio"
+          "networkmanager"
+        ];
+        hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
+        openssh.authorizedKeys.keys = [
+          # Public key of the main workstation
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2jPT/9sf897gTeV7skAMZe6a2vMaLXMwdp1QQDvbt4"
+          # Public key of the laptop
+          "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCxojjMerhqRDdte4XWui7vOW5BmiTp4XM7ibgvYVvf2CPCFTlQUvFKk2GmvUvuEPWpKoQJi9eZ3W+r0JHGHMFc3FwGOC8PUGqO/fMFt0WfcAgXzS0whsxOmOqKWDCqRn71T8RqzjkMPEKB0+t1wLE5ikkDCmYuKxH3gM7oOwluE6V27Oq15dCU3JYjopwu0dVmqrgT7oYQfCTWgztQWuBlKQg/3PAICoxsyzjufbplxKX0GZ1lRdMIenGIvVFMs/nHvlVCcwGMYkBeq6A1DJZy5RUO/tUNWcH9NFD3MdL8Iboo6Gj9DAiuZWFr7mTRgq+cOA3FP97UrPgl58xEJ9bj"
+        ];
+        shell = pkgs.bash;
+      };
+    };
   };
 }

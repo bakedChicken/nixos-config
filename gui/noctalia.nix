@@ -1,5 +1,4 @@
-{ inputs, ... }:
-{
+{inputs, ...}: {
   flake = {
     homeModules = {
       noctalia = {
@@ -12,8 +11,8 @@
           settings = {
             bar.default = {
               margin_ends = 2;
-              start = [ "workspaces" ];
-              center = [ "active_window" ];
+              start = ["workspaces"];
+              center = ["active_window"];
               end = [
                 "sysmon"
                 "tray"

@@ -1,5 +1,4 @@
-{ inputs, ... }:
-{
+{inputs, ...}: {
   flake = {
     homeModules = {
       umbriel = {
@@ -12,12 +11,12 @@
           settings = {
             general = {
               mod_key = "Alt";
-              autostart = [ "noctalia" ];
+              autostart = ["noctalia"];
             };
             output = {
               Virtual-1 = {
-                mode = "3024x1890@60";
-                scale = 2;
+                mode = "5120x2160@60";
+                scale = 1.5;
               };
             };
             input = {
@@ -38,8 +37,8 @@
               "Mod+D" = "spawn:noctalia msg panel-toggle launcher";
               "Mod+F" = "spawn:firefox";
               "Mod+E" = "spawn:emacs";
-              "Mod+R" = "window-cycle-width";
-              "Mod+Shift+R" = "window-cycle-width-back";
+              "Mod+R" = "window-cycle-primary-extent";
+              "Mod+Shift+R" = "window-cycle-primary-extent-back";
               "Mod+H" = "window-focus-left";
               "Mod+Shift+H" = "column-move-left";
               "Mod+J" = "window-focus-or-workspace-down";
@@ -76,7 +75,7 @@
     };
 
     nixosModules = {
-      umbriel = { pkgs, ... }: {
+      umbriel = {pkgs, ...}: {
         imports = [
           inputs.umbriel.nixosModules.default
         ];

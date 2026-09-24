@@ -1,7 +1,6 @@
-{ self, ... }:
-{
+{self, ...}: {
   flake = {
-    homeModules.wm = { pkgs, ... }: {
+    homeModules.wm = {pkgs, ...}: {
       home.pointerCursor = {
         enable = true;
         package = pkgs.kdePackages.breeze;
@@ -10,7 +9,7 @@
       };
     };
 
-    nixosModules.wm = { pkgs, ... }: {
+    nixosModules.wm = {pkgs, ...}: {
       services.displayManager = {
         enable = true;
         sddm = {

@@ -2,6 +2,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
 
     umbriel = {
       url = "git+https://github.com/noctalia-dev/umbriel";
@@ -44,22 +45,22 @@
     };
   };
 
-  outputs =
-    inputs@{
-      self,
-      nixpkgs,
-      home-manager,
-      nvf,
-      flake-parts,
-      disko,
-      agenix,
-      agenix-rekey,
-      ...
-    }:
-    flake-parts.lib.mkFlake { inherit inputs; } (
-      { withSystem, ... }:
-      {
+  outputs = inputs @ {
+    self,
+    nixpkgs,
+    treefmt-nix,
+    home-manager,
+    nvf,
+    flake-parts,
+    disko,
+    agenix,
+    agenix-rekey,
+    ...
+  }:
+    flake-parts.lib.mkFlake {inherit inputs;} (
+      {withSystem, ...}: {
         imports = [
+          treefmt-nix.flakeModule
           home-manager.flakeModules.home-manager
           agenix-rekey.flakeModules.default
           disko.flakeModules.default
@@ -75,24 +76,25 @@
           "aarch64-linux"
         ];
 
-        perSystem =
-          {
-            pkgs,
-            inputs',
-            ...
-          }:
-          {
-            formatter = pkgs.nixfmt-tree;
-
-            devShells.default = pkgs.mkShellNoCC {
-              packages = with pkgs; [
-                inputs'.deploy-rs.packages.default
-                inputs'.agenix-rekey.packages.default
-                nixfmt-tree
-                nixd
-              ];
-            };
+        perSystem = {
+          pkgs,
+          inputs',
+          ...
+        }: {
+          treefmt = {
+            projectRootFile = "flake.nix";
+            programs.prettier.enable = true;
+            programs.alejandra.enable = true;
           };
+
+          devShells.default = pkgs.mkShellNoCC {
+            packages = with pkgs; [
+              inputs'.deploy-rs.packages.default
+              inputs'.agenix-rekey.packages.default
+              nixd
+            ];
+          };
+        };
 
         flake = {
           diskoConfigurations = {
@@ -117,14 +119,14 @@
                         type = "filesystem";
                         format = "vfat";
                         mountpoint = "/boot";
-                        mountOptions = [ "umask=0077" ];
+                        mountOptions = ["umask=0077"];
                       };
                     };
                     root = {
                       size = "100%";
                       content = {
                         type = "btrfs";
-                        extraArgs = [ "-f" ];
+                        extraArgs = ["-f"];
                         subvolumes = {
                           "/root" = {
                             mountpoint = "/";
@@ -161,7 +163,7 @@
               virtualisation.hypervGuest.enable = true;
             };
 
-            common-bloat-module = { pkgs, ... }: {
+            common-bloat-module = {pkgs, ...}: {
               imports = [
                 home-manager.nixosModules.default
               ];
@@ -186,115 +188,117 @@
               };
             };
 
-            common-nix-module =
-              { pkgs, config, ... }:
-              {
-                imports = [
-                  agenix.nixosModules.default
-                  agenix-rekey.nixosModules.default
-                ];
+            common-nix-module = {
+              pkgs,
+              config,
+              ...
+            }: {
+              imports = [
+                agenix.nixosModules.default
+                agenix-rekey.nixosModules.default
+              ];
 
-                nix = {
-                  settings = {
-                    experimental-features = [
-                      "nix-command"
-                      "flakes"
-                    ];
-                    trusted-users = [
-                      "root"
-                      "@wheel"
-                    ];
-                  };
-                  channel.enable = false;
-                  optimise.automatic = true;
-                  gc.automatic = true;
+              nix = {
+                settings = {
+                  experimental-features = [
+                    "nix-command"
+                    "flakes"
+                  ];
+                  trusted-users = [
+                    "root"
+                    "@wheel"
+                  ];
                 };
-
-                boot.kernelPackages = pkgs.linuxPackages_latest;
-                boot.loader.systemd-boot.enable = true;
-                boot.initrd.systemd.enable = true;
-
-                networking.useDHCP = false;
-                networking.networkmanager = {
-                  enable = true;
-                  settings = {
-                    connection = {
-                      "ipv4.clat" = "auto";
-                    };
-                  };
-                };
-
-                services.avahi = {
-                  enable = true;
-                  nssmdns4 = true;
-                  nssmdns6 = true;
-                  publish = {
-                    enable = true;
-                    userServices = true;
-                    domain = true;
-                  };
-                };
-
-                age = {
-                  rekey = {
-                    storageMode = "local";
-                    localStorageDir = ./. + "/rekeyed/${config.networking.hostName}";
-                    masterIdentities = [
-                      "/home/artur/.ssh/id_ed25519"
-                    ];
-                  };
-                };
-
-                services.openssh.enable = true;
-                security.sudo.wheelNeedsPassword = false;
-
-                time.timeZone = "Europe/Vienna";
-                i18n.defaultLocale = "en_US.UTF-8";
-
-                nixpkgs.config.allowUnfree = true;
-                system.stateVersion = "25.11";
+                channel.enable = false;
+                optimise.automatic = true;
+                gc.automatic = true;
               };
+
+              boot.kernelPackages = pkgs.linuxPackages_latest;
+              boot.loader.systemd-boot.enable = true;
+              boot.initrd.systemd.enable = true;
+
+              networking.useDHCP = false;
+              networking.networkmanager = {
+                enable = true;
+                settings = {
+                  connection = {
+                    "ipv4.clat" = "auto";
+                  };
+                };
+              };
+
+              services.avahi = {
+                enable = true;
+                nssmdns4 = true;
+                nssmdns6 = true;
+                publish = {
+                  enable = true;
+                  userServices = true;
+                  domain = true;
+                };
+              };
+
+              age = {
+                rekey = {
+                  storageMode = "local";
+                  localStorageDir = ./. + "/rekeyed/${config.networking.hostName}";
+                  masterIdentities = [
+                    "/home/artur/.ssh/id_ed25519"
+                  ];
+                };
+              };
+
+              services.openssh.enable = true;
+              security.sudo.wheelNeedsPassword = false;
+
+              time.timeZone = "Europe/Vienna";
+              i18n.defaultLocale = "en_US.UTF-8";
+
+              nixpkgs.config.allowUnfree = true;
+              system.stateVersion = "25.11";
+            };
           };
 
           nixosConfigurations = {
             nixos-development-environment-aarch64 = withSystem "aarch64-linux" (
-              { system, ... }:
-              nixpkgs.lib.nixosSystem {
-                modules = [
-                  self.diskoConfigurations.default
-                  self.nixosModules.common-nix-module
-                  self.nixosModules.common-bloat-module
-                  self.nixosModules.artur
-                  self.nixosModules.wm
-                  self.nixosModules.umbriel
-                  self.nixosModules.noctalia
-                  {
-                    networking.hostName = "nixos-development-environment-aarch64";
-                    nixpkgs.hostPlatform = system;
-                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
-                  }
-                ];
-              }
+              {system, ...}:
+                nixpkgs.lib.nixosSystem {
+                  modules = [
+                    self.diskoConfigurations.default
+                    self.nixosModules.common-nix-module
+                    self.nixosModules.common-bloat-module
+                    self.nixosModules.artur
+                    self.nixosModules.wm
+                    self.nixosModules.umbriel
+                    self.nixosModules.noctalia
+                    {
+                      networking.hostName = "nixos-development-environment-aarch64";
+                      nixpkgs.hostPlatform = system;
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
+                    }
+                  ];
+                }
             );
 
             nixos-development-environment = withSystem "x86_64-linux" (
-              { system, ... }:
-              nixpkgs.lib.nixosSystem {
-                modules = [
-                  self.diskoConfigurations.default
-                  self.nixosModules.common-nix-module
-                  self.nixosModules.common-bloat-module
-                  self.nixosModules.hyperv-vm
-                  self.nixosModules.artur
-                  self.nixosModules.xserver
-                  self.nixosModules.kde-desktop
-                  {
-                    networking.hostName = "nixos-development-environment";
-                    nixpkgs.hostPlatform = system;
-                    age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
-                  }
-                ];
-              }
+              {system, ...}:
+                nixpkgs.lib.nixosSystem {
+                  modules = [
+                    self.diskoConfigurations.default
+                    self.nixosModules.common-nix-module
+                    self.nixosModules.common-bloat-module
+                    self.nixosModules.hyperv-vm
+                    self.nixosModules.artur
+                    self.nixosModules.xserver
+                    self.nixosModules.kde-desktop
+                    {
+                      networking.hostName = "nixos-development-environment";
+                      nixpkgs.hostPlatform = system;
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
+                    }
+                  ];
+                }
             );
           };
         };
