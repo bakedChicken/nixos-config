@@ -1,0 +1,252 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-cloudflare
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: artur.luppov@icloud.com
+    privateKeySecretRef:
+      name: letsencrypt
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token-secret
+              key: api-token
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-cloudflare-staging
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: artur.luppov@icloud.com
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token-secret
+              key: api-token
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: burned-gateway
+  namespace: gateway-system
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    cert-manager.io/private-key-rotation-policy: "Never"
+    argocd.argoproj.io/sync-wave: "31"
+spec:
+  gatewayClassName: cilium
+  allowedListeners:
+    namespaces:
+      from: All
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+    - name: https
+      hostname: "burned.host"
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: burned-host-tls
+    - name: wildcard-https
+      hostname: "*.burned.host"
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: burned-host-tls
+    - name: internal-https
+      hostname: "*.internal.k8s.burned.host"
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: burned-host-internal-tls
+    - name: internal-apex-https
+      hostname: "internal.k8s.burned.host"
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: burned-host-internal-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: global-redirect-http
+  namespace: gateway-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "31"
+spec:
+  parentRefs:
+    - name: burned-gateway
+      namespace: gateway-system
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: burned-host-tls
+  namespace: gateway-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "29"
+    argocd.argoproj.io/ignore-healthcheck: "true"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: burned-host-tls
+    deletionPolicy: Delete
+    template:
+      type: kubernetes.io/tls
+      metadata:
+        labels:
+          controller.cert-manager.io/fao: "true"
+        annotations:
+          cert-manager.io/alt-names: "burned.host,*.burned.host"
+          cert-manager.io/certificate-name: burned-host-tls
+          cert-manager.io/common-name: burned.host
+          cert-manager.io/ip-sans: ""
+          cert-manager.io/issuer-group: cert-manager.io
+          cert-manager.io/issuer-kind: ClusterIssuer
+          cert-manager.io/issuer-name: letsencrypt-cloudflare
+          cert-manager.io/uri-sans: ""
+  dataFrom:
+    - extract:
+        key: burned-host-tls
+---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: burned-host-tls
+  namespace: gateway-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "32"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  refreshInterval: 1h
+  secretStoreRefs:
+    - name: openbao
+      kind: ClusterSecretStore
+  selector:
+    secret:
+      name: burned-host-tls
+  data:
+    - match:
+        secretKey: tls.crt
+        remoteRef:
+          remoteKey: burned-host-tls
+          property: tls.crt
+    - match:
+        secretKey: tls.key
+        remoteRef:
+          remoteKey: burned-host-tls
+          property: tls.key
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: burned-host-internal-tls
+  namespace: gateway-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "29"
+    argocd.argoproj.io/ignore-healthcheck: "true"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: burned-host-internal-tls
+    deletionPolicy: Delete
+    template:
+      type: kubernetes.io/tls
+      metadata:
+        labels:
+          controller.cert-manager.io/fao: "true"
+        annotations:
+          cert-manager.io/alt-names: "internal.k8s.burned.host,*.internal.k8s.burned.host"
+          cert-manager.io/certificate-name: burned-host-internal-tls
+          cert-manager.io/common-name: "*.internal.k8s.burned.host"
+          cert-manager.io/ip-sans: ""
+          cert-manager.io/issuer-group: cert-manager.io
+          cert-manager.io/issuer-kind: ClusterIssuer
+          cert-manager.io/issuer-name: letsencrypt-cloudflare
+          cert-manager.io/uri-sans: ""
+  dataFrom:
+    - extract:
+        key: burned-host-internal-tls
+---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: burned-host-internal-tls
+  namespace: gateway-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "32"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  refreshInterval: 1h
+  secretStoreRefs:
+    - name: openbao
+      kind: ClusterSecretStore
+  selector:
+    secret:
+      name: burned-host-internal-tls
+  data:
+    - match:
+        secretKey: tls.crt
+        remoteRef:
+          remoteKey: burned-host-internal-tls
+          property: tls.crt
+    - match:
+        secretKey: tls.key
+        remoteRef:
+          remoteKey: burned-host-internal-tls
+          property: tls.key

@@ -1,0 +1,122 @@
+#+TITLE: My NixOS Powered Kubernetes homelab
+#+AUTHOR: Artur Luppov
+#+DESCRIPTION: NixOS-powered homelab configuration
+
+* Table of Contents :TOC:
+- [[#prelude][Prelude]]
+- [[#kubernetes-cluster][Kubernetes cluster]]
+  - [[#naming-convention][Naming convention]]
+  - [[#installation-and-first-boot][Installation and first-boot]]
+  - [[#mdns][mDNS]]
+  - [[#workload][Workload]]
+
+* Prelude
+
+This repository contains the configuration files for my whole homelab. It deploys a 3-node HA Kubernetes (k3s) cluster with its dependencies, as well as it's used to configure my personal development machine.
+
+I'm generally trying to avoid using Nix as a /programming/ language, and only use it as a declarative configuration language. No loops, no conditions, no custom functions. This is mainly because I want to avoid being autistically overwhelmed.
+
+* Kubernetes cluster
+
+Kubernetes cluster is hosted on 3 virtual machines (Hyper-V). I use k3s, btw. The nodes are running DualStack IPv4 + IPv6 for now, but I'm trying to go IPv6-mostly.
+
+On top of the cluster I install Cilium as a CNI and service mesh. Additionally, I have a TrueNAS machine in my local network, which I'm using as a CSI. I have a 10Gbps connection between the nodes and the TrueNAS server, so it's interesting to compare the performance of NVMe-oF vs iSCSI vs NFS.
+
+Configuration of the VMs:
++ CPU: 8 cores
++ RAM: 16384 MB
++ Disk Space: 32 GB
+
+| VM Name    |  IPv4 address | IPv6 address | Role                    |
+|------------+---------------+--------------+-------------------------|
+| k8s-node-1 | 172.16.30.201 | TBD          | k3s server + k3s worker |
+| k8s-node-2 | 172.16.30.202 | TBD          | k3s server + k3s worker |
+| k8s-node-3 | 172.16.30.203 | TBD          | k3s server + k3s worker |
+| opaque-pi  |           TBD | TBD          | k3s worker              |
+| transp-pi  |           TBD | TBD          | k3s worker              |
+
+** Naming convention
+
+One second-level domain, ~burned.host~, covers every app: ~<app>.burned.host~ for anything meant to be reachable from the public internet, ~<app>.internal.k8s.burned.host~ for anything in the Kubernetes cluster that should only resolve on the home network/VPN.
+
+** Installation and first-boot
+
+My TrueNAS machine runs a Docker instance of netboot.xyz, which I use for iPXE network booting. After VMs are created and started, it's enough to boot the latest NixOS installer image and change the password for the live user.
+After that, I use nixos-anywhere to deploy the configuration for each respective node, using the following command:
+
+#+begin_example bash
+nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-1 --target-host artur@k8s-node-1.local
+#+end_example
+
+Sometimes nix ends up in an installer image, and installer image doesn't have this user or mDNS service, so if the host is not reachable try:
+
+#+begin_example bash
+nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-1 --target-host root@172.16.30.201
+#+end_example
+
+If you have a running Linux distro, ~--copy-host-keys~ will make sure that your ~/etc/ssh/ssh_host_ed25519~ private and public keys are persisted. Not the ~~/.ssh~ though. This is important, because agenix relies on those files to encrypt and decrypt secrets.
+
+After the deployment is done, VMs should reboot and launch a ready-to-use NixOS instance. Consequent chages could be deployed using the following command
+
+#+begin_example bash
+sudo nixos-rebuild switch --flake .#k8s-node-1 --target-host artur@k8s-node-1.local --elevate=sudo --ask-elevate-password
+#+end_example
+
+Or simply:
+
+#+begin_example bash
+deploy .#k8s-node-1
+#+end_example
+
+** mDNS
+
+I'm using avahi-daemon to advertize mDNS records in my local network, but it works reliably only when nodes are using IPv4. IPv6 recive 2 GUA SLAAC addresses, one of which is dynamic, and it's kind of hard to predict which address the client will resolve via mDNS query. Things are getting even worse, considering that I'm trying to deploy ULA on my local network, just to avoid exposing the cluster to the global internet. Because it's hard to predict which mDNS address is going to be resolved, etcd instance of k3s is freaking out, which is not surprising, because they require a static IP address.
+
+** Workload
+
+The cluster is managed in two layers, the platform only consuming what the infrastructure provides:
+
+| Layer          | Tool                              | Where                      | Command                   |
+|----------------+-----------------------------------+----------------------------+---------------------------|
+| Infrastructure | NixOS (deploy-rs, nixos-anywhere) | ~kubernetes.nix~, ~infra/~ | ~deploy .#k8s-node-1~     |
+| Platform       | Argo CD, project ~platform~       | ~platform/~                | ~nix run .#push-platform~ |
+
+~push-platform~ pushes ~platform/~ from the working tree to ghcr.io as a private OCI artifact (~homelab-platform:latest~), annotated with the git commit and whether the tree was dirty. Argo CD picks it up within a few minutes; nothing has to be committed. The cluster runs whatever was pushed last, so push before reinstalling. The push token is the ~ghcr-token~ agenix secret of the dev machines; Argo CD reads with ~argocd-ghcr-creds~.
+
+Infrastructure (NixOS) - everything tied to the machines, or needed before Argo CD can run:
+
++ [X] k3s, disks, firewall, agenix (join token, Cloudflare token, TrueNAS API key, OpenBao seal key, Argo CD registry credentials)
++ [X] Cilium (CNI + service mesh + Gateway API implementation + Hubble), Gateway API CRDs, LoadBalancer IP pool
++ [X] kube-vip (control-plane VIP)
++ [X] TrueNAS SCALE CSI driver (~tns-csi~, NVMe-oF, default StorageClass) + CSI snapshot CRDs and ~snapshot-controller~
++ [X] OpenBao server (single replica on raft storage, static-seal auto-unseal, self-init that only creates vault-config-operator's login)
++ [X] Argo CD, the ~platform~ project and its root Application (~infra/argocd-bootstrap.yaml~)
+
+Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its own resources. The root Application syncs the whole directory in sync waves, so everything starts after what it depends on:
+
+| Wave  | What                                                                                          |
+|-------+-----------------------------------------------------------------------------------------------|
+|    -1 | Namespaces                                                                                    |
+|     0 | cert-manager, CloudNativePG operator, Keycloak operator                                       |
+|    10 | vault-config-operator, External Secrets Operator, Barman Cloud plugin                         |
+|    20 | OpenBao contents (KV store, ESO access, generated secrets), ~ClusterSecretStore~              |
+| 29-32 | Saved TLS certificates restored, issuers, ~burned-gateway~, certificates saved back           |
+| 39-40 | ~default-postgres-cluster~ and its backups                                                    |
+| 50-52 | Keycloak: database grant, Keycloak at ~auth.burned.host~, ~homelab~ realm                     |
+| 59-63 | Keycloak login for OpenBao, RustFS and its ~rustfs-setup~ Job (buckets, users, policies)      |
+| 69-71 | Loki, Tempo, Grafana, Alloy, OpenTelemetry Operator, kube-state-metrics, Nisshi, Mimir       |
+|    80 | OpenTelemetry ~Instrumentation~                                                               |
+
+Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/openbao.yaml~, a line in the ~rustfs-setup~ Job and the ~rustfs-users~ secret in ~platform/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.
+
+Mimir runs as a single binary with Nisshi (S3-backed, Kafka-compatible) as its ingest buffer.
+
+Notes on non-obvious defaults/constraints:
+
++ Cluster uses deterministic PVC names, to avoid orphaned claims during full wipe. All ~reclaimPolicy~ or ~deleteStrategy~ annotations serve the same purpose: prevent orphans and make sure the data is not wiped during cluster reinstall. A node wipe never touches TrueNAS: every retained dataset is re-adopted by name on reinstall. To really start an app from scratch, delete its datasets (and NVMe-oF subsystems) on TrueNAS while the cluster is down.
++ Secrets: agenix only holds what must exist before the cluster is up. Everything else is generated once by a ~RandomSecret~ in OpenBao and never overwritten, so it survives a wipe together with OpenBao's datasets. Each namespace that needs a secret has its own ~ExternalSecret~.
++ OpenBao's self-init runs once, on empty storage. The rest of its configuration lives in ~platform/openbao.yaml~ and is continuously reconciled by vault-config-operator.
++ Let's Encrypt certificates are pushed from ~gateway-system~ into OpenBao and restored from there before the Gateway exists, to stay below the rate limit of 5 identical certificates per week.
++ ~default-postgres-cluster~ carries ~cnpg.io/skipEmptyWalArchiveCheck~: after a reinstall its retained volumes continue the same database, so the WAL already in its backup path is its own. Argo CD never deletes it (~Prune=false,Delete=false~).
++ Manifests in ~infra/~ are applied by k3s, which never deletes resources of a manifest removed from the configuration: delete its ~Addon~ by hand, or reinstall. Argo CD-managed layers don't have this problem.
++ RustFS buckets, users and per-bucket policies are created by the ~rustfs-setup~ Job (RustFS ~rc~ CLI, re-runs whenever the Job changes). Passwords live in OpenBao, so they survive a wipe. 

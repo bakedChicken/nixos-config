@@ -1,0 +1,157 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudnativepg
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: postgres
+  sources:
+    - repoURL: ghcr.io/cloudnative-pg/charts
+      chart: cloudnative-pg
+      targetRevision: 0.29.0
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plugin-barman-cloud
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: postgres
+  sources:
+    - repoURL: ghcr.io/cloudnative-pg/charts
+      chart: plugin-barman-cloud
+      targetRevision: 0.8.0
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: default-postgres-cluster
+  namespace: postgres
+  annotations:
+    cnpg.io/skipEmptyWalArchiveCheck: enabled
+    argocd.argoproj.io/sync-wave: "40"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false,SkipDryRunOnMissingResource=true
+spec:
+  instances: 3
+  inheritedMetadata:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9187"
+  storage:
+    size: 32Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  backup:
+    volumeSnapshot:
+      className: tns-csi-nvmeof-snapshot
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: postgres-backups
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: postgres-backups
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  retentionPolicy: 30d
+  configuration:
+    destinationPath: s3://backups/default-postgres-cluster.postgres/
+    endpointURL: http://rustfs-svc.rustfs-system.svc.cluster.local:9000
+    s3Credentials:
+      accessKeyId:
+        name: rustfs-backup-creds
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: rustfs-backup-creds
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: default-postgres-cluster-daily
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  schedule: "0 0 3 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: default-postgres-cluster
+  method: volumeSnapshot
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rustfs-backup-creds
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "63"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rustfs-backup-creds
+    template:
+      data:
+        ACCESS_KEY_ID: postgres-backup
+        ACCESS_SECRET_KEY: "{{ .secret_key }}"
+  dataFrom:
+    - extract:
+        key: postgres-backup-rustfs

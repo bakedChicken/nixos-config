@@ -65,7 +65,10 @@
 
 #+begin_src emacs-lisp
   (add-to-list 'custom-theme-load-path (expand-file-name "themes" user-emacs-directory))
-  (load-theme 'noctalia t)
+
+  (if
+      (file-exists-p (file-name-concat (expand-file-name "themes" user-emacs-directory) "noctalia-theme.el"))
+      (load-theme 'noctalia t))
 #+end_src
 
 ** Hooks
