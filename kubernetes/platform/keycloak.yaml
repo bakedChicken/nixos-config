@@ -1,0 +1,450 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keycloak-operator
+  sources:
+    # Upstream's own kustomization: CRDs + a cluster-wide operator.
+    - repoURL: https://github.com/keycloak/keycloak-k8s-resources.git
+      targetRevision: 26.7.4
+      path: kubernetes/cluster-wide
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: keycloak
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: keycloak
+  login: true
+  passwordSecret:
+    name: keycloak-db-creds
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: keycloak
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: keycloak
+  owner: keycloak
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-db-creds
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: keycloak-db-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: keycloak
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: keycloak-postgres-creds
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-db-creds
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: keycloak-db-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: keycloak
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: keycloak-postgres-creds
+---
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "51"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  instances: 2
+  db:
+    vendor: postgres
+    host: default-postgres-cluster-rw.postgres.svc.cluster.local
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db-creds
+      key: username
+    passwordSecret:
+      name: keycloak-db-creds
+      key: password
+  hostname:
+    hostname: auth.burned.host
+  http:
+    httpEnabled: true
+  proxy:
+    headers: xforwarded
+  ingress:
+    enabled: false
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+---
+apiVersion: k8s.keycloak.org/v2beta1
+kind: KeycloakRealmImport
+metadata:
+  name: homelab
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "52"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  keycloakCRName: keycloak
+  placeholders:
+    RUSTFS_OIDC_CLIENT_SECRET:
+      secret:
+        name: rustfs-oidc-client-secret
+        key: client_secret
+    GRAFANA_OIDC_CLIENT_SECRET:
+      secret:
+        name: grafana-oidc-client-secret
+        key: client_secret
+    OPENBAO_OIDC_CLIENT_SECRET:
+      secret:
+        name: openbao-oidc-client-secret
+        key: client_secret
+    KEYCLOAK_ADMIN_TEMP_PASSWORD:
+      secret:
+        name: keycloak-admin-user
+        key: temp_password
+    ARGOCD_OIDC_CLIENT_SECRET:
+      secret:
+        name: argocd-oidc-client-secret
+        key: client_secret
+  realm:
+    realm: homelab
+    enabled: true
+    sslRequired: external
+    registrationAllowed: false
+    roles:
+      client:
+        rustfs-console:
+          - name: consoleAdmin
+    groups:
+      - name: admin
+        clientRoles:
+          rustfs-console:
+            - consoleAdmin
+    users:
+      - username: admin
+        enabled: true
+        emailVerified: true
+        credentials:
+          - type: password
+            value: "${KEYCLOAK_ADMIN_TEMP_PASSWORD}"
+            temporary: true
+        requiredActions:
+          - UPDATE_PASSWORD
+        groups:
+          - admin
+    clients:
+      - clientId: rustfs-console
+        name: RustFS Console
+        enabled: true
+        clientAuthenticatorType: client-secret
+        secret: "${RUSTFS_OIDC_CLIENT_SECRET}"
+        publicClient: false
+        standardFlowEnabled: true
+        implicitFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        redirectUris:
+          - "https://rustfs.internal.k8s.burned.host/rustfs/admin/v3/oidc/callback/default"
+        webOrigins:
+          - "https://rustfs.internal.k8s.burned.host"
+        attributes:
+          pkce.code.challenge.method: S256
+          post.logout.redirect.uris: https://rustfs.internal.k8s.burned.host/*
+        protocolMappers:
+          - name: rustfs-client-roles
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-client-role-mapper
+            config:
+              usermodel.clientRoleMapping.clientId: rustfs-console
+              multivalued: "true"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              claim.name: groups
+      - clientId: grafana
+        name: Grafana
+        enabled: true
+        clientAuthenticatorType: client-secret
+        secret: "${GRAFANA_OIDC_CLIENT_SECRET}"
+        publicClient: false
+        standardFlowEnabled: true
+        implicitFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        redirectUris:
+          - "https://grafana.internal.k8s.burned.host/login/generic_oauth"
+        webOrigins:
+          - "https://grafana.internal.k8s.burned.host"
+        attributes:
+          pkce.code.challenge.method: S256
+        protocolMappers:
+          - name: grafana-groups
+            protocol: openid-connect
+            protocolMapper: oidc-group-membership-mapper
+            config:
+              full.path: "false"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              claim.name: groups
+      - clientId: openbao
+        name: OpenBao
+        enabled: true
+        clientAuthenticatorType: client-secret
+        secret: "${OPENBAO_OIDC_CLIENT_SECRET}"
+        publicClient: false
+        standardFlowEnabled: true
+        implicitFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        redirectUris:
+          - "https://openbao.internal.k8s.burned.host/ui/vault/auth/sso/keycloak/oidc/callback"
+          - "https://openbao.internal.k8s.burned.host/v1/auth/sso/keycloak/oidc/callback"
+          - "http://localhost:8250/oidc/callback"
+        webOrigins:
+          - "https://openbao.internal.k8s.burned.host"
+        attributes:
+          pkce.code.challenge.method: S256
+        protocolMappers:
+          - name: openbao-groups
+            protocol: openid-connect
+            protocolMapper: oidc-group-membership-mapper
+            config:
+              full.path: "false"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              claim.name: groups
+      - clientId: argocd
+        name: Argo CD
+        enabled: true
+        clientAuthenticatorType: client-secret
+        secret: ${ARGOCD_OIDC_CLIENT_SECRET}
+        publicClient: false
+        standardFlowEnabled: true
+        implicitFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        redirectUris:
+          - https://argocd.internal.k8s.burned.host/auth/callback
+        webOrigins:
+          - https://argocd.internal.k8s.burned.host
+        attributes:
+          pkce.code.challenge.method: S256
+        protocolMappers:
+          - name: argocd-groups
+            protocol: openid-connect
+            protocolMapper: oidc-group-membership-mapper
+            config:
+              full.path: "false"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+              claim.name: groups
+    displayName: Homelab
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-admin-user
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: keycloak-admin-user
+  dataFrom:
+    - extract:
+        key: keycloak-admin-user
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rustfs-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rustfs-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: rustfs-oidc-client-secret
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: grafana-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: grafana-oidc-client-secret
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openbao-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: openbao-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: openbao-oidc-client-secret
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: keycloak
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "52"
+spec:
+  parentRefs:
+    - name: burned-gateway
+      namespace: gateway-system
+      sectionName: wildcard-https
+  hostnames:
+    - auth.burned.host
+  rules:
+    - backendRefs:
+        - name: keycloak-service
+          port: 8080
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: argocd-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: argocd-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: argocd-oidc-client-secret
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: argocd-oidc-client-secret
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: argocd-oidc-client-secret
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/part-of: argocd
+  dataFrom:
+    - extract:
+        key: argocd-oidc-client-secret

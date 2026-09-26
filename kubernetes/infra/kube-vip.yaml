@@ -7,8 +7,6 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  annotations:
-    rbac.authorization.kubernetes.io/autoupdate: "true"
   name: system:kube-vip-role
 rules:
   - apiGroups: [""]
@@ -29,7 +27,6 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["list"]
-
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -67,9 +64,6 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: node-role.kubernetes.io/master
-                    operator: Exists
-              - matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
                     operator: Exists
       containers:
@@ -105,7 +99,6 @@ spec:
           image: ghcr.io/kube-vip/kube-vip:v1.2.1
           imagePullPolicy: IfNotPresent
           name: kube-vip
-          resources: {}
           securityContext:
             capabilities:
               add:
@@ -120,4 +113,3 @@ spec:
           operator: Exists
         - effect: NoExecute
           operator: Exists
-  updateStrategy: {}

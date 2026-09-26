@@ -1,0 +1,259 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rustfs-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rustfs-root-creds
+  namespace: rustfs-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "59"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rustfs-root-creds
+    template:
+      data:
+        RUSTFS_ACCESS_KEY: rustfs-root
+        RUSTFS_SECRET_KEY: "{{ .secret_key }}"
+  dataFrom:
+    - extract:
+        key: rustfs-root
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rustfs-oidc-client-secret
+  namespace: rustfs-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "59"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rustfs-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: rustfs-oidc-client-secret
+---
+# Passwords of the app users, one key per user, for the rustfs-setup Job. The apps read theirs from OpenBao too.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rustfs-users
+  namespace: rustfs-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "59"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rustfs-users
+  data:
+    - secretKey: postgres-backup
+      remoteRef:
+        key: postgres-backup-rustfs
+        property: secret_key
+    - secretKey: loki
+      remoteRef:
+        key: loki-rustfs
+        property: secret_key
+    - secretKey: tempo
+      remoteRef:
+        key: tempo-rustfs
+        property: secret_key
+    - secretKey: mimir
+      remoteRef:
+        key: mimir-rustfs
+        property: secret_key
+    - secretKey: nisshi
+      remoteRef:
+        key: nisshi-rustfs
+        property: secret_key
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rustfs
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "60"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rustfs-system
+  sources:
+    - repoURL: https://charts.rustfs.com
+      chart: rustfs
+      targetRevision: 1.0.0
+      helm:
+        valuesObject:
+          extraEnv:
+            - name: RUSTFS_BROWSER_REDIRECT_URL
+              value: https://rustfs.internal.k8s.burned.host
+            - name: RUSTFS_IDENTITY_OPENID_ENABLE
+              value: "on"
+            - name: RUSTFS_IDENTITY_OPENID_CONFIG_URL
+              value: https://auth.burned.host/realms/homelab
+            - name: RUSTFS_IDENTITY_OPENID_CLIENT_ID
+              value: rustfs-console
+            - name: RUSTFS_IDENTITY_OPENID_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: client_secret
+                  name: rustfs-oidc-client-secret
+            - name: RUSTFS_IDENTITY_OPENID_SCOPES
+              value: openid,profile,email
+            - name: RUSTFS_IDENTITY_OPENID_REDIRECT_URI
+              value: https://rustfs.internal.k8s.burned.host/rustfs/admin/v3/oidc/callback/default
+            - name: RUSTFS_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC
+              value: "off"
+            - name: RUSTFS_IDENTITY_OPENID_DISPLAY_NAME
+              value: Keycloak
+            - name: RUSTFS_IDENTITY_OPENID_GROUPS_CLAIM
+              value: groups
+            - name: RUSTFS_IDENTITY_OPENID_ROLES_CLAIM
+              value: roles
+            - name: RUSTFS_IDENTITY_OPENID_EMAIL_CLAIM
+              value: email
+            - name: RUSTFS_IDENTITY_OPENID_USERNAME_CLAIM
+              value: preferred_username
+            - name: RUSTFS_OUTBOUND_ALLOW_ORIGINS
+              value: https://auth.burned.host
+          gatewayApi:
+            enabled: true
+            existingGateway:
+              name: burned-gateway
+              namespace: gateway-system
+            gatewayClass: cilium
+            hostname: rustfs.internal.k8s.burned.host
+            httpToHttpsRedirect: false
+            listeners:
+              https:
+                name: internal-https
+          ingress:
+            enabled: false
+          mode:
+            distributed:
+              enabled: false
+            standalone:
+              enabled: true
+          secret:
+            existingSecret: rustfs-root-creds
+          storageclass:
+            dataStorageSize: 10Gi
+            logStorageSize: 1Gi
+            name: tns-csi-nvmeof
+          config:
+            rustfs:
+              obs_log_directory: ""
+          extraManifests:
+            - apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: rustfs-setup
+                annotations:
+                  argocd.argoproj.io/sync-wave: "1"
+                  argocd.argoproj.io/sync-options: Replace=true
+              spec:
+                backoffLimit: 5
+                template:
+                  spec:
+                    restartPolicy: OnFailure
+                    containers:
+                      - name: rc
+                        image: docker.io/rustfs/rc:v0.1.36
+                        command:
+                          - sh
+                          - -euc
+                          - |
+                            export RC_HOST_rustfs="http://$RUSTFS_ACCESS_KEY:$RUSTFS_SECRET_KEY@rustfs-svc:9000"
+                            setup() {
+                              user=$1; shift; resources=""
+                              for bucket in "$@"; do
+                                rc mb "rustfs/$bucket" --ignore-existing
+                                resources="$resources\"arn:aws:s3:::$bucket\",\"arn:aws:s3:::$bucket/*\","
+                              done
+                              echo "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:*\"],\"Resource\":[${resources%,}]}]}" > "/tmp/$user.json"
+                              rc admin policy create rustfs/ "$user" "/tmp/$user.json"
+                              rc admin user add rustfs/ "$user" "$(cat "/users/$user")"
+                              rc admin policy attach rustfs/ "$user" --user "$user"
+                            }
+                            setup postgres-backup backups
+                            setup loki loki
+                            setup tempo tempo
+                            setup mimir mimir-blocks mimir-ruler mimir-alertmanager
+                            setup nisshi nisshi
+                        env:
+                          - name: RC_CONFIG_DIR
+                            value: /tmp
+                        envFrom:
+                          - secretRef:
+                              name: rustfs-root-creds
+                        volumeMounts:
+                          - name: users
+                            mountPath: /users
+                            readOnly: true
+                    volumes:
+                      - name: users
+                        secret:
+                          secretName: rustfs-users
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rustfs-console-redirect
+  namespace: rustfs-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "61"
+spec:
+  parentRefs:
+    - name: burned-gateway
+      namespace: gateway-system
+      sectionName: internal-https
+  hostnames:
+    - rustfs.internal.k8s.burned.host
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /
+          method: GET
+          headers:
+            - type: RegularExpression
+              name: Accept
+              value: .*text/html.*
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /rustfs/console/

@@ -1,0 +1,947 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: grafana
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: grafana
+  login: true
+  inRoles:
+    - pg_read_all_data
+  passwordSecret:
+    name: grafana-postgres-creds
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-postgres-creds
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: grafana-postgres-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: grafana
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: grafana-postgres-creds
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-postgres-creds
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: grafana-postgres-creds
+  dataFrom:
+    - extract:
+        key: grafana-postgres-creds
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-oidc-client-secret
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: grafana-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: grafana-oidc-client-secret
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+data:
+  config.alloy: |
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
+
+    discovery.relabel "pods" {
+      targets = discovery.kubernetes.pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_node_name"]
+        target_label  = "node"
+      }
+    }
+
+    loki.source.kubernetes "pods" {
+      targets    = discovery.relabel.pods.output
+      forward_to = [loki.write.default.receiver]
+    }
+
+    loki.write "default" {
+      endpoint {
+        url = "http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push"
+      }
+    }
+
+    discovery.relabel "metrics" {
+      targets = discovery.relabel.pods.output
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+        action        = "keep"
+        regex         = "true"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
+        action        = "replace"
+        target_label  = "__metrics_path__"
+        regex         = "(.+)"
+      }
+      rule {
+        source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+        action        = "replace"
+        regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+        replacement   = "$1:$2"
+        target_label  = "__address__"
+      }
+    }
+
+    prometheus.scrape "kubernetes_pods" {
+      targets    = discovery.relabel.metrics.output
+      forward_to = [prometheus.remote_write.mimir.receiver]
+      params = {
+        format = ["prometheus"],
+      }
+    }
+
+    prometheus.remote_write "mimir" {
+      endpoint {
+        url = "http://mimir-gateway.observability.svc.cluster.local/api/v1/push"
+      }
+    }
+
+    prometheus.exporter.unix "node" {
+      procfs_path = "/host/proc"
+      sysfs_path  = "/host/sys"
+    }
+
+    prometheus.scrape "node" {
+      targets    = prometheus.exporter.unix.node.targets
+      forward_to = [prometheus.remote_write.mimir.receiver]
+    }
+
+    otelcol.receiver.otlp "instrumentation" {
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+
+      output {
+        traces  = [otelcol.exporter.otlp.tempo.input]
+        metrics = [otelcol.exporter.prometheus.default.input]
+        logs    = [otelcol.exporter.loki.default.input]
+      }
+    }
+
+    otelcol.exporter.otlp "tempo" {
+      client {
+        endpoint = "tempo.observability.svc.cluster.local:4317"
+        tls {
+          insecure = true
+        }
+      }
+    }
+
+    otelcol.exporter.prometheus "default" {
+      forward_to = [prometheus.remote_write.mimir.receiver]
+    }
+
+    otelcol.exporter.loki "default" {
+      forward_to = [loki.write.default.receiver]
+    }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: ghcr.io/grafana-community/helm-charts
+      chart: loki
+      targetRevision: 18.13.3
+      helm:
+        valuesObject:
+          backend:
+            replicas: 0
+          deploymentMode: Monolithic
+          global:
+            extraArgs:
+              - "-config.expand-env=true"
+            extraEnvFrom:
+              - secretRef:
+                  name: loki-rustfs-creds
+          loki:
+            auth_enabled: false
+            commonConfig:
+              replication_factor: 1
+            schemaConfig:
+              configs:
+                - from: "2026-01-01"
+                  index:
+                    period: 24h
+                    prefix: index_
+                  object_store: s3
+                  schema: v13
+                  store: tsdb
+            storage:
+              bucketNames:
+                chunks: loki
+                ruler: loki
+              s3:
+                accessKeyId: ${AWS_ACCESS_KEY_ID}
+                endpoint: rustfs-svc.rustfs-system.svc.cluster.local:9000
+                insecure: true
+                region: us-east-1
+                s3ForcePathStyle: true
+                secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+              type: s3
+          read:
+            replicas: 0
+          singleBinary:
+            podAnnotations:
+              prometheus.io/port: "3100"
+              prometheus.io/scrape: "true"
+            replicas: 1
+          write:
+            replicas: 0
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: ghcr.io/grafana-community/helm-charts
+      chart: tempo
+      targetRevision: 3.0.0
+      helm:
+        valuesObject:
+          podAnnotations:
+            prometheus.io/port: "3200"
+            prometheus.io/scrape: "true"
+          tempo:
+            extraArgs:
+              config.expand-env: "true"
+            extraEnvFrom:
+              - secretRef:
+                  name: tempo-rustfs-creds
+            storage:
+              trace:
+                backend: s3
+                s3:
+                  access_key: ${AWS_ACCESS_KEY_ID}
+                  bucket: tempo
+                  endpoint: rustfs-svc.rustfs-system.svc.cluster.local:9000
+                  insecure: true
+                  secret_key: ${AWS_SECRET_ACCESS_KEY}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: ghcr.io/grafana-community/helm-charts
+      chart: grafana
+      targetRevision: 13.2.5
+      helm:
+        valuesObject:
+          dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+                - disableDeletion: false
+                  editable: true
+                  folder: ""
+                  name: default
+                  options:
+                    path: /var/lib/grafana/dashboards/default
+                  orgId: 1
+                  type: file
+          dashboards:
+            default:
+              kubernetes-kube-state-metrics:
+                datasource: Mimir
+                gnetId: 21742
+                revision: 1
+              loki-stack-monitoring:
+                datasource: Mimir
+                gnetId: 14055
+                revision: 5
+              node-exporter-full:
+                datasource: Mimir
+                gnetId: 1860
+                revision: 45
+              openbao-vault:
+                datasource: Mimir
+                gnetId: 12904
+                revision: 2
+              postgres-cloudnativepg:
+                datasource: Mimir
+                gnetId: 20417
+                revision: 4
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - access: proxy
+                  name: Loki
+                  type: loki
+                  url: http://loki-gateway.observability.svc.cluster.local
+                - access: proxy
+                  name: Tempo
+                  type: tempo
+                  url: http://tempo.observability.svc.cluster.local:3200
+                - access: proxy
+                  name: Mimir
+                  type: prometheus
+                  url: http://mimir-gateway.observability.svc.cluster.local/prometheus
+                - access: proxy
+                  database: postgres
+                  jsonData:
+                    postgresVersion: 1800
+                    sslmode: disable
+                  name: Postgres
+                  secureJsonData:
+                    password: $GRAFANA_POSTGRES_PASSWORD
+                  type: postgres
+                  url: default-postgres-cluster-rw.postgres.svc.cluster.local:5432
+                  user: grafana
+          envValueFrom:
+            GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+              secretKeyRef:
+                key: client_secret
+                name: grafana-oidc-client-secret
+            GRAFANA_POSTGRES_PASSWORD:
+              secretKeyRef:
+                key: password
+                name: grafana-postgres-creds
+          grafana.ini:
+            auth.generic_oauth:
+              allow_assign_grafana_admin: true
+              api_url: https://auth.burned.host/realms/homelab/protocol/openid-connect/userinfo
+              auth_url: https://auth.burned.host/realms/homelab/protocol/openid-connect/auth
+              client_id: grafana
+              enabled: true
+              name: Keycloak
+              role_attribute_path: contains(groups[*], 'admin') && 'GrafanaAdmin' || 'Viewer'
+              role_attribute_strict: false
+              scopes: openid profile email
+              token_url: https://auth.burned.host/realms/homelab/protocol/openid-connect/token
+              use_pkce: true
+            server:
+              root_url: https://grafana.internal.k8s.burned.host
+          route:
+            main:
+              enabled: true
+              hostnames:
+                - grafana.internal.k8s.burned.host
+              parentRefs:
+                - name: burned-gateway
+                  namespace: gateway-system
+                  sectionName: internal-https
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.12.1
+      helm:
+        valuesObject:
+          alloy:
+            configMap:
+              create: false
+              name: alloy-config
+            extraPorts:
+              - name: otlp-http
+                port: 4318
+                protocol: TCP
+                targetPort: 4318
+            mounts:
+              extra:
+                - mountPath: /host/proc
+                  name: host-proc
+                  readOnly: true
+                - mountPath: /host/sys
+                  name: host-sys
+                  readOnly: true
+          controller:
+            hostPID: true
+            volumes:
+              extra:
+                - hostPath:
+                    path: /proc
+                  name: host-proc
+                - hostPath:
+                    path: /sys
+                  name: host-sys
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opentelemetry-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-operator
+      targetRevision: 0.123.0
+      helm:
+        valuesObject:
+          manager:
+            featureGatesMap:
+              operand.networkpolicy: false
+              operator.networkpolicy: false
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-state-metrics
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: ghcr.io/prometheus-community/charts
+      chart: kube-state-metrics
+      targetRevision: 5.14.0
+      helm:
+        valuesObject:
+          podAnnotations:
+            prometheus.io/port: "8080"
+            prometheus.io/scrape: "true"
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: alloy
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+spec:
+  parentRefs:
+    - name: burned-gateway
+      namespace: gateway-system
+      sectionName: internal-https
+  hostnames:
+    - alloy.internal.k8s.burned.host
+  rules:
+    - backendRefs:
+        - name: alloy
+          port: 12345
+---
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: default
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "80"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  exporter:
+    endpoint: http://alloy.observability.svc.cluster.local:4318
+  propagators:
+    - tracecontext
+    - baggage
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1"
+  resource:
+    addK8sUIDAttributes: true
+  defaults:
+    useLabelsForResourceAttributes: true
+  nodejs:
+    env:
+      - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: http/protobuf
+---
+# RustFS users and buckets are created by the rustfs-setup Job (rustfs.yaml).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: loki-rustfs-creds
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: loki-rustfs-creds
+    template:
+      data:
+        AWS_ACCESS_KEY_ID: loki
+        AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
+  dataFrom:
+    - extract:
+        key: loki-rustfs
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: tempo-rustfs-creds
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: tempo-rustfs-creds
+    template:
+      data:
+        AWS_ACCESS_KEY_ID: tempo
+        AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
+  dataFrom:
+    - extract:
+        key: tempo-rustfs
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nisshi-rustfs-creds
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: nisshi-rustfs-creds
+    template:
+      data:
+        AWS_ACCESS_KEY_ID: nisshi
+        AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
+  dataFrom:
+    - extract:
+        key: nisshi-rustfs
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: mimir-rustfs-creds
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: mimir-rustfs-creds
+    template:
+      data:
+        AWS_ACCESS_KEY_ID: mimir
+        AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
+  dataFrom:
+    - extract:
+        key: mimir-rustfs
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nisshi
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nisshi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nisshi
+    spec:
+      containers:
+        - name: nisshi
+          image: ghcr.io/nisshi-io/nisshi:0.7.0-pre.2
+          args:
+            - --kafka-cluster-id=nisshi
+            - --kafka-listener-url=tcp://0.0.0.0:9092/
+            - --kafka-advertised-listener-url=tcp://nisshi.observability.svc.cluster.local:9092
+            - --storage-engine=s3://nisshi/
+          env:
+            - name: RUST_LOG
+              value: warn,nisshi_broker=info,nisshi_storage=info
+            - name: AWS_ENDPOINT
+              value: http://rustfs-svc.rustfs-system.svc.cluster.local:9000
+            - name: AWS_ALLOW_HTTP
+              value: "true"
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+          envFrom:
+            - secretRef:
+                name: nisshi-rustfs-creds
+          ports:
+            - name: kafka
+              containerPort: 9092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nisshi
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+spec:
+  selector:
+    app.kubernetes.io/name: nisshi
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: kafka
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mimir-config
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+data:
+  mimir.yaml: |
+    # "all" without query-frontend/scheduler: with ingest storage, the query-frontend's and the ingester's Kafka offset
+    # readers register the same metrics and Mimir 3.2.1 panics. The querier serves the query API itself then.
+    target: distributor,ingester,querier,store-gateway,compactor,ruler
+    multitenancy_enabled: false
+
+    server:
+      http_listen_port: 8080
+      grpc_listen_port: 9095
+      log_level: info
+
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: rustfs-svc.rustfs-system.svc.cluster.local:9000
+          region: us-east-1
+          access_key_id: ${AWS_ACCESS_KEY_ID}
+          secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+          insecure: true
+
+    ingest_storage:
+      enabled: true
+      kafka:
+        address: nisshi.observability.svc.cluster.local:9092
+        topic: mimir-ingest
+        auto_create_topic_enabled: true
+        auto_create_topic_default_partitions: 1
+
+    ingester:
+      push_grpc_method_enabled: false
+      ring:
+        replication_factor: 1
+      partition_ring:
+        min_partition_owners_count: 1
+
+    store_gateway:
+      sharding_ring:
+        replication_factor: 1
+
+    blocks_storage:
+      s3:
+        bucket_name: mimir-blocks
+      tsdb:
+        dir: /data/tsdb
+      bucket_store:
+        sync_dir: /data/tsdb-sync
+
+    compactor:
+      data_dir: /data/compactor
+
+    ruler:
+      rule_path: /data/ruler
+    ruler_storage:
+      s3:
+        bucket_name: mimir-ruler
+
+    alertmanager:
+      data_dir: /data/alertmanager
+    alertmanager_storage:
+      s3:
+        bucket_name: mimir-alertmanager
+
+    # Single-tenant homelab: generous limits instead of the multi-tenant abuse protection defaults, which drop
+    # whole remote_write batches (kube-state-metrics alone pushes ~8500 samples per scrape).
+    limits:
+      ingestion_rate: 1000000
+      ingestion_burst_size: 10000000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mimir
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+spec:
+  serviceName: mimir
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mimir
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mimir
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      securityContext:
+        fsGroup: 10001
+      containers:
+        - name: mimir
+          image: grafana/mimir:3.2.1
+          args:
+            - -config.file=/etc/mimir/mimir.yaml
+            - -config.expand-env=true
+          envFrom:
+            - secretRef:
+                name: mimir-rustfs-creds
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: grpc
+              containerPort: 9095
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mimir
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: mimir-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: tns-csi-nvmeof
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mimir-gateway
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+spec:
+  selector:
+    app.kubernetes.io/name: mimir
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

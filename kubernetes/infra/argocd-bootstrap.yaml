@@ -1,0 +1,108 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Cluster-wide services apps build on (kubernetes/platform/)
+  sourceRepos:
+    - "*"
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  source:
+    repoURL: oci://ghcr.io/bakedchicken/homelab-platform
+    targetRevision: latest
+    path: .
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+    syncOptions:
+      - ServerSideApply=true
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: helm-oci-jetstack
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: jetstack
+  url: quay.io/jetstack/charts
+  enableOCI: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: helm-oci-cloudnative-pg
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: cloudnative-pg
+  url: ghcr.io/cloudnative-pg/charts
+  enableOCI: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: helm-oci-external-secrets
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: external-secrets
+  url: ghcr.io/external-secrets/charts
+  enableOCI: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: helm-oci-grafana-community
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: grafana-community
+  url: ghcr.io/grafana-community/helm-charts
+  enableOCI: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: helm-oci-prometheus-community
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: prometheus-community
+  url: ghcr.io/prometheus-community/charts
+  enableOCI: "true"

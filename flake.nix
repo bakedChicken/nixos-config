@@ -172,6 +172,8 @@
                 nerd-fonts.fira-code
               ];
 
+              age.secrets.ghcr-token.rekeyFile = ./kubernetes/secrets/ghcr-token.age;
+
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
               home-manager.users.artur = {
