@@ -196,32 +196,6 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: keycloak-admin-user
-  namespace: openbao
-  annotations:
-    argocd.argoproj.io/sync-wave: "20"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  authentication:
-    path: kubernetes
-    role: vault-config-operator
-    serviceAccount:
-      name: vault-config-operator
-  path: secret/data
-  isKVSecretsEngineV2: true
-  kvSecretRetainPolicy: Retain
-  secretKey: temp_password
-  secretFormat:
-    inlinePasswordPolicy: |
-      length = 32
-      rule "charset" {
-        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        min-chars = 1
-      }
----
-apiVersion: redhatcop.redhat.io/v1alpha1
-kind: RandomSecret
-metadata:
   name: grafana-postgres-creds
   namespace: openbao
   annotations:
@@ -352,33 +326,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: nisshi-rustfs
-  namespace: openbao
-  annotations:
-    argocd.argoproj.io/sync-wave: "20"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  authentication:
-    path: kubernetes
-    role: vault-config-operator
-    serviceAccount:
-      name: vault-config-operator
-  path: secret/data
-  isKVSecretsEngineV2: true
-  kvSecretRetainPolicy: Retain
-  secretKey: secret_key
-  secretFormat:
-    inlinePasswordPolicy: |
-      length = 32
-      rule "charset" {
-        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        min-chars = 1
-      }
----
-apiVersion: redhatcop.redhat.io/v1alpha1
-kind: RandomSecret
-metadata:
-  name: mimir-rustfs
+  name: pyroscope-rustfs
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -428,6 +376,189 @@ spec:
       }
 ---
 apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: odoo-postgres-creds
+  namespace: openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-config-operator
+    serviceAccount:
+      name: vault-config-operator
+  path: secret/data
+  isKVSecretsEngineV2: true
+  kvSecretRetainPolicy: Retain
+  secretKey: password
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: paperclip-postgres-creds
+  namespace: openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-config-operator
+    serviceAccount:
+      name: vault-config-operator
+  path: secret/data
+  isKVSecretsEngineV2: true
+  kvSecretRetainPolicy: Retain
+  secretKey: password
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: paperclip-better-auth-secret
+  namespace: openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-config-operator
+    serviceAccount:
+      name: vault-config-operator
+  path: secret/data
+  isKVSecretsEngineV2: true
+  kvSecretRetainPolicy: Retain
+  secretKey: secret
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 64
+      rule "charset" {
+        charset = "0123456789abcdef"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: paperclip-tool-signing-secret
+  namespace: openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-config-operator
+    serviceAccount:
+      name: vault-config-operator
+  path: secret/data
+  isKVSecretsEngineV2: true
+  kvSecretRetainPolicy: Retain
+  secretKey: secret
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 64
+      rule "charset" {
+        charset = "0123456789abcdef"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: hq-bot-keycloak-password
+  namespace: openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-config-operator
+    serviceAccount:
+      name: vault-config-operator
+  path: secret/data
+  isKVSecretsEngineV2: true
+  kvSecretRetainPolicy: Retain
+  secretKey: password
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+# MCP key of Odoo's Claude Monet user (burned_config); copied once into the Mac's ~/.claude.json.
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: claude-odoo-mcp-key
+  namespace: openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-config-operator
+    serviceAccount:
+      name: vault-config-operator
+  path: secret/data
+  isKVSecretsEngineV2: true
+  kvSecretRetainPolicy: Retain
+  secretKey: key
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 48
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: hq-bot-odoo-api-key
+  namespace: openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  authentication:
+    path: kubernetes
+    role: vault-config-operator
+    serviceAccount:
+      name: vault-config-operator
+  path: secret/data
+  isKVSecretsEngineV2: true
+  kvSecretRetainPolicy: Retain
+  secretKey: key
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 40
+      rule "charset" {
+        charset = "0123456789abcdef"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
 kind: AuthEngineMount
 metadata:
   name: oidc
@@ -462,7 +593,7 @@ spec:
     serviceAccount:
       name: vault-config-operator
   path: sso/keycloak
-  OIDCDiscoveryURL: https://auth.burned.host/realms/homelab
+  OIDCDiscoveryURL: https://auth.burned.host/realms/burned
   OIDCClientID: openbao
   OIDCCredentials:
     secret:

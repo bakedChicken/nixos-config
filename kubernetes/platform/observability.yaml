@@ -82,127 +82,6 @@ spec:
     - extract:
         key: grafana-oidc-client-secret
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: alloy-config
-  namespace: observability
-  annotations:
-    argocd.argoproj.io/sync-wave: "69"
-data:
-  config.alloy: |
-    discovery.kubernetes "pods" {
-      role = "pod"
-    }
-
-    discovery.relabel "pods" {
-      targets = discovery.kubernetes.pods.targets
-
-      rule {
-        source_labels = ["__meta_kubernetes_namespace"]
-        target_label  = "namespace"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_name"]
-        target_label  = "pod"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_container_name"]
-        target_label  = "container"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_node_name"]
-        target_label  = "node"
-      }
-    }
-
-    loki.source.kubernetes "pods" {
-      targets    = discovery.relabel.pods.output
-      forward_to = [loki.write.default.receiver]
-    }
-
-    loki.write "default" {
-      endpoint {
-        url = "http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push"
-      }
-    }
-
-    discovery.relabel "metrics" {
-      targets = discovery.relabel.pods.output
-
-      rule {
-        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
-        action        = "keep"
-        regex         = "true"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
-        action        = "replace"
-        target_label  = "__metrics_path__"
-        regex         = "(.+)"
-      }
-      rule {
-        source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
-        action        = "replace"
-        regex         = "([^:]+)(?::\\d+)?;(\\d+)"
-        replacement   = "$1:$2"
-        target_label  = "__address__"
-      }
-    }
-
-    prometheus.scrape "kubernetes_pods" {
-      targets    = discovery.relabel.metrics.output
-      forward_to = [prometheus.remote_write.mimir.receiver]
-      params = {
-        format = ["prometheus"],
-      }
-    }
-
-    prometheus.remote_write "mimir" {
-      endpoint {
-        url = "http://mimir-gateway.observability.svc.cluster.local/api/v1/push"
-      }
-    }
-
-    prometheus.exporter.unix "node" {
-      procfs_path = "/host/proc"
-      sysfs_path  = "/host/sys"
-    }
-
-    prometheus.scrape "node" {
-      targets    = prometheus.exporter.unix.node.targets
-      forward_to = [prometheus.remote_write.mimir.receiver]
-    }
-
-    otelcol.receiver.otlp "instrumentation" {
-      http {
-        endpoint = "0.0.0.0:4318"
-      }
-
-      output {
-        traces  = [otelcol.exporter.otlp.tempo.input]
-        metrics = [otelcol.exporter.prometheus.default.input]
-        logs    = [otelcol.exporter.loki.default.input]
-      }
-    }
-
-    otelcol.exporter.otlp "tempo" {
-      client {
-        endpoint = "tempo.observability.svc.cluster.local:4317"
-        tls {
-          insecure = true
-        }
-      }
-    }
-
-    otelcol.exporter.prometheus "default" {
-      forward_to = [prometheus.remote_write.mimir.receiver]
-    }
-
-    otelcol.exporter.loki "default" {
-      forward_to = [loki.write.default.receiver]
-    }
----
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -235,7 +114,11 @@ spec:
           loki:
             auth_enabled: false
             commonConfig:
-              replication_factor: 1
+              replication_factor: 3
+            # Drop ingesters that stopped heartbeating (e.g. a pod that came back with a new IP) instead of keeping
+            # them in the ring forever, where they block writes and readiness.
+            ingester:
+              autoforget_unhealthy: true
             schemaConfig:
               configs:
                 - from: "2026-01-01"
@@ -261,9 +144,20 @@ spec:
             replicas: 0
           singleBinary:
             podAnnotations:
+              k8s.grafana.com/metrics.container: loki
               prometheus.io/port: "3100"
               prometheus.io/scrape: "true"
-            replicas: 1
+            replicas: 3
+          gateway:
+            enabled: false
+          chunksCache:
+            enabled: false
+          resultsCache:
+            enabled: false
+          lokiCanary:
+            enabled: false
+          test:
+            enabled: false
           write:
             replicas: 0
   syncPolicy:
@@ -369,41 +263,74 @@ spec:
           dashboards:
             default:
               kubernetes-kube-state-metrics:
-                datasource: Mimir
                 gnetId: 21742
                 revision: 1
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+                  - name: VAR_DATASOURCE
+                    value: prometheus
+              mikrotik-mktxp:
+                gnetId: 13679
+                revision: 32
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
               loki-stack-monitoring:
-                datasource: Mimir
                 gnetId: 14055
                 revision: 5
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+                  - name: DS_LOKI
+                    value: loki
               node-exporter-full:
-                datasource: Mimir
                 gnetId: 1860
                 revision: 45
               openbao-vault:
-                datasource: Mimir
                 gnetId: 12904
                 revision: 2
+                datasource:
+                  - name: DS_PROMXY
+                    value: prometheus
               postgres-cloudnativepg:
-                datasource: Mimir
                 gnetId: 20417
                 revision: 4
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+                  - name: DS_EXPRESSION
+                    value: __expr__
           datasources:
             datasources.yaml:
               apiVersion: 1
               datasources:
                 - access: proxy
                   name: Loki
+                  uid: loki
                   type: loki
-                  url: http://loki-gateway.observability.svc.cluster.local
+                  url: http://loki.observability.svc.cluster.local:3100
                 - access: proxy
                   name: Tempo
                   type: tempo
                   url: http://tempo.observability.svc.cluster.local:3200
                 - access: proxy
-                  name: Mimir
+                  name: Prometheus
+                  uid: prometheus
+                  isDefault: true
                   type: prometheus
-                  url: http://mimir-gateway.observability.svc.cluster.local/prometheus
+                  url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
+                - access: proxy
+                  name: Alertmanager
+                  type: alertmanager
+                  url: http://vmalertmanager-main.observability.svc.cluster.local:9093
+                  jsonData:
+                    handleGrafanaManagedAlerts: false
+                    implementation: prometheus
+                - access: proxy
+                  name: Pyroscope
+                  type: grafana-pyroscope-datasource
+                  url: http://pyroscope-query-frontend.observability.svc.cluster.local:4040
                 - access: proxy
                   database: postgres
                   jsonData:
@@ -425,17 +352,19 @@ spec:
                 key: password
                 name: grafana-postgres-creds
           grafana.ini:
+            auth:
+              disable_login_form: true
             auth.generic_oauth:
               allow_assign_grafana_admin: true
-              api_url: https://auth.burned.host/realms/homelab/protocol/openid-connect/userinfo
-              auth_url: https://auth.burned.host/realms/homelab/protocol/openid-connect/auth
+              api_url: https://auth.burned.host/realms/burned/protocol/openid-connect/userinfo
+              auth_url: https://auth.burned.host/realms/burned/protocol/openid-connect/auth
               client_id: grafana
               enabled: true
               name: Keycloak
               role_attribute_path: contains(groups[*], 'admin') && 'GrafanaAdmin' || 'Viewer'
               role_attribute_strict: false
               scopes: openid profile email
-              token_url: https://auth.burned.host/realms/homelab/protocol/openid-connect/token
+              token_url: https://auth.burned.host/realms/burned/protocol/openid-connect/token
               use_pkce: true
             server:
               root_url: https://grafana.internal.k8s.burned.host
@@ -466,7 +395,7 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: alloy
+  name: k8s-monitoring
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "70"
@@ -479,37 +408,167 @@ spec:
     namespace: observability
   sources:
     - repoURL: https://grafana.github.io/helm-charts
-      chart: alloy
-      targetRevision: 1.12.1
+      chart: k8s-monitoring
+      targetRevision: 4.5.2
       helm:
         valuesObject:
-          alloy:
-            configMap:
-              create: false
-              name: alloy-config
-            extraPorts:
-              - name: otlp-http
-                port: 4318
-                protocol: TCP
-                targetPort: 4318
-            mounts:
-              extra:
-                - mountPath: /host/proc
-                  name: host-proc
-                  readOnly: true
-                - mountPath: /host/sys
-                  name: host-sys
-                  readOnly: true
-          controller:
-            hostPID: true
-            volumes:
-              extra:
-                - hostPath:
-                    path: /proc
-                  name: host-proc
-                - hostPath:
-                    path: /sys
-                  name: host-sys
+          cluster:
+            name: burned
+          destinations:
+            metrics:
+              type: prometheus
+              url: http://vminsert-metrics.observability.svc.cluster.local:8480/insert/0/prometheus/api/v1/write
+            logs:
+              type: loki
+              url: http://loki.observability.svc.cluster.local:3100/loki/api/v1/push
+            traces:
+              type: otlp
+              protocol: grpc
+              url: tempo.observability.svc.cluster.local:4317
+              tls:
+                insecure: true
+              metrics:
+                enabled: false
+              logs:
+                enabled: false
+            profiles:
+              type: pyroscope
+              url: http://pyroscope-distributor.observability.svc.cluster.local:4040
+          clusterMetrics:
+            enabled: true
+            collector: alloy-metrics
+            kube-state-metrics:
+              jobLabel: kube-state-metrics
+              metricsTuning:
+                useDefaultAllowList: false
+            kubelet:
+              jobLabel: kubelet
+              metricsTuning:
+                useDefaultAllowList: false
+              extraDiscoveryRules: |
+                rule {
+                  target_label = "metrics_path"
+                  replacement  = "/metrics"
+                }
+            kubeletResource:
+              jobLabel: kubelet
+              extraDiscoveryRules: |
+                rule {
+                  target_label = "metrics_path"
+                  replacement  = "/metrics/resource"
+                }
+            cadvisor:
+              jobLabel: kubelet
+              metricsTuning:
+                useDefaultAllowList: false
+              extraDiscoveryRules: |
+                rule {
+                  target_label = "metrics_path"
+                  replacement  = "/metrics/cadvisor"
+                }
+            apiServer:
+              enabled: true
+              jobLabel: apiserver
+            kubeDNS:
+              enabled: true
+          hostMetrics:
+            enabled: true
+            collector: alloy-metrics
+            linuxHosts:
+              enabled: true
+              jobLabel: node-exporter
+              metricsTuning:
+                useDefaultAllowList: false
+          annotationAutodiscovery:
+            enabled: true
+            collector: alloy-metrics
+            services:
+              enabled: false
+            annotations:
+              scrape: prometheus.io/scrape
+              metricsPath: prometheus.io/path
+              metricsPortNumber: prometheus.io/port
+            extraDiscoveryRules: |
+              rule {
+                source_labels = ["__meta_kubernetes_namespace"]
+                regex         = "openbao"
+                target_label  = "__param_format"
+                replacement   = "prometheus"
+              }
+          prometheusOperatorObjects:
+            enabled: true
+            collector: alloy-metrics
+          kubernetesManifests:
+            enabled: true
+            collector: alloy-metrics
+          podLogsViaLoki:
+            enabled: true
+            collector: alloy-logs
+          nodeLogs:
+            enabled: true
+            collector: alloy-logs
+          clusterEvents:
+            enabled: true
+            collector: alloy-singleton
+          applicationObservability:
+            enabled: true
+            collector: alloy-receiver
+            receivers:
+              otlp:
+                grpc:
+                  enabled: true
+                http:
+                  enabled: true
+          profiling:
+            enabled: true
+            collector: alloy-profiles
+            ebpf:
+              enabled: true
+              targetingScheme: all
+            pprof:
+              enabled: true
+          collectors:
+            alloy-metrics:
+              presets: [clustered, statefulset]
+              controller:
+                replicas: 2
+            alloy-logs:
+              presets: [filesystem-log-reader, daemonset]
+            alloy-singleton:
+              presets: [singleton]
+            alloy-receiver:
+              presets: [otel-receiver, deployment]
+              controller:
+                replicas: 2
+            alloy-profiles:
+              presets: [privileged, daemonset]
+          telemetryServices:
+            k8s-manifest-tail:
+              deploy: true
+              config:
+                objects:
+                  - apiVersion: apps/v1
+                    kind: Deployment
+                  - apiVersion: apps/v1
+                    kind: StatefulSet
+                  - apiVersion: apps/v1
+                    kind: DaemonSet
+                  - apiVersion: batch/v1
+                    kind: CronJob
+                  - apiVersion: v1
+                    kind: ConfigMap
+                  - apiVersion: v1
+                    kind: Service
+                  - apiVersion: v1
+                    kind: PersistentVolumeClaim
+                  - apiVersion: gateway.networking.k8s.io/v1
+                    kind: HTTPRoute
+                  - apiVersion: argoproj.io/v1alpha1
+                    kind: Application
+            kube-state-metrics:
+              deploy: true
+            node-exporter:
+              deploy: true
   syncPolicy:
     automated:
       prune: true
@@ -564,44 +623,6 @@ spec:
         factor: 2
         maxDuration: 5m
 ---
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: kube-state-metrics
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "70"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: platform
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: observability
-  sources:
-    - repoURL: ghcr.io/prometheus-community/charts
-      chart: kube-state-metrics
-      targetRevision: 5.14.0
-      helm:
-        valuesObject:
-          podAnnotations:
-            prometheus.io/port: "8080"
-            prometheus.io/scrape: "true"
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
----
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -618,7 +639,7 @@ spec:
     - alloy.internal.k8s.burned.host
   rules:
     - backendRefs:
-        - name: alloy
+        - name: k8s-monitoring-alloy-metrics
           port: 12345
 ---
 apiVersion: opentelemetry.io/v1alpha1
@@ -631,7 +652,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   exporter:
-    endpoint: http://alloy.observability.svc.cluster.local:4318
+    endpoint: http://k8s-monitoring-alloy-receiver.observability.svc.cluster.local:4318
   propagators:
     - tracecontext
     - baggage
@@ -647,7 +668,7 @@ spec:
       - name: OTEL_EXPORTER_OTLP_PROTOCOL
         value: http/protobuf
 ---
-# RustFS users and buckets are created by the rustfs-setup Job (rustfs.yaml).
+# RustFS users and buckets are created by the rustfs-users Job (rustfs.yaml).
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -695,7 +716,7 @@ spec:
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: nisshi-rustfs-creds
+  name: pyroscope-rustfs-creds
   namespace: observability
   annotations:
     argocd.argoproj.io/sync-wave: "69"
@@ -705,243 +726,423 @@ spec:
     kind: ClusterSecretStore
     name: openbao
   target:
-    name: nisshi-rustfs-creds
+    name: pyroscope-rustfs-creds
     template:
       data:
-        AWS_ACCESS_KEY_ID: nisshi
+        AWS_ACCESS_KEY_ID: pyroscope
         AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
   dataFrom:
     - extract:
-        key: nisshi-rustfs
+        key: pyroscope-rustfs
 ---
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
+apiVersion: argoproj.io/v1alpha1
+kind: Application
 metadata:
-  name: mimir-rustfs-creds
-  namespace: observability
-  annotations:
-    argocd.argoproj.io/sync-wave: "69"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: openbao
-  target:
-    name: mimir-rustfs-creds
-    template:
-      data:
-        AWS_ACCESS_KEY_ID: mimir
-        AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
-  dataFrom:
-    - extract:
-        key: mimir-rustfs
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nisshi
-  namespace: observability
+  name: pyroscope
+  namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: nisshi
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: nisshi
-    spec:
-      containers:
-        - name: nisshi
-          image: ghcr.io/nisshi-io/nisshi:0.7.0-pre.2
-          args:
-            - --kafka-cluster-id=nisshi
-            - --kafka-listener-url=tcp://0.0.0.0:9092/
-            - --kafka-advertised-listener-url=tcp://nisshi.observability.svc.cluster.local:9092
-            - --storage-engine=s3://nisshi/
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: pyroscope
+      targetRevision: 2.3.1
+      helm:
+        valuesObject:
+          alloy:
+            enabled: false
+          architecture:
+            microservices:
+              enabled: true
+          pyroscope:
+            extraArgs:
+              config.expand-env: "true"
+              log.level: info
+            extraEnvFrom:
+              - secretRef:
+                  name: pyroscope-rustfs-creds
+            podAnnotations:
+              prometheus.io/port: "4040"
+              prometheus.io/scrape: "true"
+            structuredConfig:
+              storage:
+                backend: s3
+                s3:
+                  access_key_id: ${AWS_ACCESS_KEY_ID}
+                  bucket_name: pyroscope
+                  endpoint: rustfs-svc.rustfs-system.svc.cluster.local:9000
+                  force_path_style: true
+                  insecure: true
+                  region: us-east-1
+                  secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+            components:
+              distributor:
+                replicaCount: 2
+                resources: &small
+                  limits:
+                    memory: 1Gi
+                  requests:
+                    cpu: 50m
+                    memory: 128Mi
+                affinity:
+                  podAntiAffinity:
+                    preferredDuringSchedulingIgnoredDuringExecution:
+                      - weight: 100
+                        podAffinityTerm:
+                          labelSelector:
+                            matchLabels:
+                              app.kubernetes.io/component: distributor
+                          topologyKey: kubernetes.io/hostname
+              query-frontend:
+                replicaCount: 2
+                resources: *small
+                affinity:
+                  podAntiAffinity:
+                    preferredDuringSchedulingIgnoredDuringExecution:
+                      - weight: 100
+                        podAffinityTerm:
+                          labelSelector:
+                            matchLabels:
+                              app.kubernetes.io/component: query-frontend
+                          topologyKey: kubernetes.io/hostname
+              query-backend:
+                replicaCount: 2
+                resources: *small
+                affinity:
+                  podAntiAffinity:
+                    preferredDuringSchedulingIgnoredDuringExecution:
+                      - weight: 100
+                        podAffinityTerm:
+                          labelSelector:
+                            matchLabels:
+                              app.kubernetes.io/component: query-backend
+                          topologyKey: kubernetes.io/hostname
+              segment-writer:
+                replicaCount: 3
+                resources:
+                  limits:
+                    memory: 2Gi
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                affinity:
+                  podAntiAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/component: segment-writer
+                        topologyKey: kubernetes.io/hostname
+              compaction-worker:
+                replicaCount: 2
+                resources: *small
+                affinity:
+                  podAntiAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/component: compaction-worker
+                        topologyKey: kubernetes.io/hostname
+              metastore:
+                replicaCount: 3
+                persistence:
+                  enabled: true
+                  size: 2Gi
+                resources: *small
+                affinity:
+                  podAntiAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/component: metastore
+                        topologyKey: kubernetes.io/hostname
+              tenant-settings:
+                resources: *small
+              ad-hoc-profiles:
+                resources: *small
+              admin:
+                resources: *small
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: victoria-metrics-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: https://victoriametrics.github.io/helm-charts
+      chart: victoria-metrics-operator
+      targetRevision: 0.68.0
+      helm:
+        valuesObject:
+          admissionWebhooks:
+            certManager:
+              enabled: true
+          operator:
+            prometheus_converter_add_argocd_ignore_annotations: true
           env:
-            - name: RUST_LOG
-              value: warn,nisshi_broker=info,nisshi_storage=info
-            - name: AWS_ENDPOINT
-              value: http://rustfs-svc.rustfs-system.svc.cluster.local:9000
-            - name: AWS_ALLOW_HTTP
-              value: "true"
-            - name: AWS_DEFAULT_REGION
-              value: us-east-1
-          envFrom:
-            - secretRef:
-                name: nisshi-rustfs-creds
-          ports:
-            - name: kafka
-              containerPort: 9092
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_SERVICESCRAPE
+              value: "false"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_PODMONITOR
+              value: "false"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_PROBE
+              value: "false"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_SCRAPECONFIG
+              value: "false"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_ALERTMANAGERCONFIG
+              value: "false"
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
 ---
-apiVersion: v1
-kind: Service
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMCluster
 metadata:
-  name: nisshi
-  namespace: observability
-  annotations:
-    argocd.argoproj.io/sync-wave: "70"
-spec:
-  selector:
-    app.kubernetes.io/name: nisshi
-  ports:
-    - name: kafka
-      port: 9092
-      targetPort: kafka
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mimir-config
+  name: metrics
   namespace: observability
   annotations:
     argocd.argoproj.io/sync-wave: "71"
-data:
-  mimir.yaml: |
-    # "all" without query-frontend/scheduler: with ingest storage, the query-frontend's and the ingester's Kafka offset
-    # readers register the same metrics and Mimir 3.2.1 panics. The querier serves the query API itself then.
-    target: distributor,ingester,querier,store-gateway,compactor,ruler
-    multitenancy_enabled: false
-
-    server:
-      http_listen_port: 8080
-      grpc_listen_port: 9095
-      log_level: info
-
-    common:
-      storage:
-        backend: s3
-        s3:
-          endpoint: rustfs-svc.rustfs-system.svc.cluster.local:9000
-          region: us-east-1
-          access_key_id: ${AWS_ACCESS_KEY_ID}
-          secret_access_key: ${AWS_SECRET_ACCESS_KEY}
-          insecure: true
-
-    ingest_storage:
-      enabled: true
-      kafka:
-        address: nisshi.observability.svc.cluster.local:9092
-        topic: mimir-ingest
-        auto_create_topic_enabled: true
-        auto_create_topic_default_partitions: 1
-
-    ingester:
-      push_grpc_method_enabled: false
-      ring:
-        replication_factor: 1
-      partition_ring:
-        min_partition_owners_count: 1
-
-    store_gateway:
-      sharding_ring:
-        replication_factor: 1
-
-    blocks_storage:
-      s3:
-        bucket_name: mimir-blocks
-      tsdb:
-        dir: /data/tsdb
-      bucket_store:
-        sync_dir: /data/tsdb-sync
-
-    compactor:
-      data_dir: /data/compactor
-
-    ruler:
-      rule_path: /data/ruler
-    ruler_storage:
-      s3:
-        bucket_name: mimir-ruler
-
-    alertmanager:
-      data_dir: /data/alertmanager
-    alertmanager_storage:
-      s3:
-        bucket_name: mimir-alertmanager
-
-    # Single-tenant homelab: generous limits instead of the multi-tenant abuse protection defaults, which drop
-    # whole remote_write batches (kube-state-metrics alone pushes ~8500 samples per scrape).
-    limits:
-      ingestion_rate: 1000000
-      ingestion_burst_size: 10000000
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  retentionPeriod: 30d
+  replicationFactor: 2
+  vmstorage:
+    replicaCount: 3
+    podDisruptionBudget:
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vmstorage
+            topologyKey: kubernetes.io/hostname
+    storage:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 10Gi
+  vminsert:
+    replicaCount: 2
+    podDisruptionBudget:
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vminsert
+            topologyKey: kubernetes.io/hostname
+  vmselect:
+    replicaCount: 2
+    podDisruptionBudget:
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vmselect
+            topologyKey: kubernetes.io/hostname
+    extraArgs:
+      search.latencyOffset: 0s
+      search.maxLookback: 5m
+      search.disableImplicitConversion: "true"
+      dedup.minScrapeInterval: 1ms
+      vmalert.proxyURL: http://vmalert-main.observability.svc.cluster.local:8080
 ---
-apiVersion: apps/v1
-kind: StatefulSet
+apiVersion: argoproj.io/v1alpha1
+kind: Application
 metadata:
-  name: mimir
+  name: kube-prometheus-rules
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 91.8.2
+      helm:
+        valuesObject:
+          defaultRules:
+            rules:
+              alertmanager: false
+              configReloaders: false
+              etcd: false
+              kubeControllerManager: false
+              kubeProxy: false
+              kubeSchedulerAlerting: false
+              kubeSchedulerRecording: false
+              prometheus: false
+              prometheusOperator: false
+              windows: false
+          alertmanager:
+            enabled: false
+          grafana:
+            enabled: false
+          kubeStateMetrics:
+            enabled: false
+          nodeExporter:
+            enabled: false
+          prometheusOperator:
+            enabled: false
+          prometheus:
+            enabled: false
+          kubernetesServiceMonitors:
+            enabled: false
+          coreDns:
+            enabled: false
+          kubeControllerManager:
+            enabled: false
+          kubeScheduler:
+            enabled: false
+          kubeEtcd:
+            enabled: false
+          kubeProxy:
+            enabled: false
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAlert
+metadata:
+  name: main
   namespace: observability
   annotations:
-    argocd.argoproj.io/sync-wave: "71"
+    argocd.argoproj.io/sync-wave: "72"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  serviceName: mimir
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: mimir
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: mimir
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
-    spec:
-      securityContext:
-        fsGroup: 10001
-      containers:
-        - name: mimir
-          image: grafana/mimir:3.2.1
-          args:
-            - -config.file=/etc/mimir/mimir.yaml
-            - -config.expand-env=true
-          envFrom:
-            - secretRef:
-                name: mimir-rustfs-creds
-          ports:
-            - name: http
-              containerPort: 8080
-            - name: grpc
-              containerPort: 9095
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: http
-            initialDelaySeconds: 15
-          volumeMounts:
-            - name: config
-              mountPath: /etc/mimir
-            - name: data
-              mountPath: /data
-      volumes:
-        - name: config
-          configMap:
-            name: mimir-config
-  volumeClaimTemplates:
-    - metadata:
-        name: data
+  replicaCount: 2
+  evaluationInterval: 30s
+  selectAllByDefault: true
+  datasource:
+    url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
+  remoteWrite:
+    url: http://vminsert-metrics.observability.svc.cluster.local:8480/insert/0/prometheus
+  remoteRead:
+    url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
+  notifiers:
+    - selector:
+        namespaceSelector:
+          matchNames:
+            - observability
+        labelSelector:
+          matchLabels:
+            alerting: main
+  podDisruptionBudget:
+    maxUnavailable: 1
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vmalert
+            topologyKey: kubernetes.io/hostname
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAlertmanager
+metadata:
+  name: main
+  namespace: observability
+  labels:
+    alerting: main
+  annotations:
+    argocd.argoproj.io/sync-wave: "72"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  replicaCount: 3
+  podDisruptionBudget:
+    maxUnavailable: 1
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmalertmanager
+          topologyKey: kubernetes.io/hostname
+  storage:
+    volumeClaimTemplate:
       spec:
-        accessModes:
-          - ReadWriteOnce
-        storageClassName: tns-csi-nvmeof
         resources:
           requests:
-            storage: 10Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mimir-gateway
-  namespace: observability
-  annotations:
-    argocd.argoproj.io/sync-wave: "71"
-spec:
-  selector:
-    app.kubernetes.io/name: mimir
-  ports:
-    - name: http
-      port: 80
-      targetPort: http
+            storage: 1Gi
+  configRawYaml: |
+    route:
+      receiver: "null"
+      group_by: [cluster, namespace, alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+    inhibit_rules:
+      - source_matchers: [severity="critical"]
+        target_matchers: [severity=~"warning|info"]
+        equal: [namespace, alertname]
+      - source_matchers: [severity="warning"]
+        target_matchers: [severity="info"]
+        equal: [namespace, alertname]
+      - source_matchers: [alertname="InfoInhibitor"]
+        target_matchers: [severity="info"]
+        equal: [namespace]
+      - target_matchers: [alertname="InfoInhibitor"]
+    receivers:
+      - name: "null"

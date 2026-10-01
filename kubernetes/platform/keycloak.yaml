@@ -153,7 +153,7 @@ spec:
 apiVersion: k8s.keycloak.org/v2beta1
 kind: KeycloakRealmImport
 metadata:
-  name: homelab
+  name: burned
   namespace: keycloak
   annotations:
     argocd.argoproj.io/sync-wave: "52"
@@ -173,19 +173,30 @@ spec:
       secret:
         name: openbao-oidc-client-secret
         key: client_secret
-    KEYCLOAK_ADMIN_TEMP_PASSWORD:
+    ADMIN_PASSWORD_HASH:
       secret:
-        name: keycloak-admin-user
-        key: temp_password
+        name: keycloak-admin-password
+        key: hash
+    ADMIN_PASSWORD_SALT:
+      secret:
+        name: keycloak-admin-password
+        key: salt
+    HQ_BOT_PASSWORD:
+      secret:
+        name: hq-bot-keycloak-password
+        key: password
     ARGOCD_OIDC_CLIENT_SECRET:
       secret:
         name: argocd-oidc-client-secret
         key: client_secret
   realm:
-    realm: homelab
+    realm: burned
     enabled: true
     sslRequired: external
     registrationAllowed: false
+    registrationEmailAsUsername: true
+    loginWithEmailAllowed: true
+    duplicateEmailsAllowed: false
     roles:
       client:
         rustfs-console:
@@ -195,18 +206,35 @@ spec:
         clientRoles:
           rustfs-console:
             - consoleAdmin
+      - name: readonly
     users:
-      - username: admin
+      - id: 434aca5f-5979-407c-b700-fe8c257ce09c
+        username: admin@burned.host
+        email: admin@burned.host
+        firstName: Artur
+        lastName: Luppov
         enabled: true
         emailVerified: true
         credentials:
           - type: password
-            value: "${KEYCLOAK_ADMIN_TEMP_PASSWORD}"
-            temporary: true
-        requiredActions:
-          - UPDATE_PASSWORD
+            secretData: '{"value":"${ADMIN_PASSWORD_HASH}","salt":"${ADMIN_PASSWORD_SALT}","additionalParameters":{}}'
+            credentialData: '{"hashIterations":210000,"algorithm":"pbkdf2-sha512","additionalParameters":{}}'
         groups:
           - admin
+        clientRoles:
+          realm-management:
+            - realm-admin
+      - username: hq-bot@burned.host
+        email: hq-bot@burned.host
+        firstName: HQ
+        lastName: Bot
+        enabled: true
+        emailVerified: true
+        credentials:
+          - type: password
+            value: "${HQ_BOT_PASSWORD}"
+        groups:
+          - readonly
     clients:
       - clientId: rustfs-console
         name: RustFS Console
@@ -316,25 +344,19 @@ spec:
               access.token.claim: "true"
               userinfo.token.claim: "true"
               claim.name: groups
-    displayName: Homelab
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: keycloak-admin-user
-  namespace: keycloak
-  annotations:
-    argocd.argoproj.io/sync-wave: "50"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: openbao
-  target:
-    name: keycloak-admin-user
-  dataFrom:
-    - extract:
-        key: keycloak-admin-user
+      - clientId: odoo
+        name: Odoo
+        enabled: true
+        publicClient: true
+        standardFlowEnabled: false
+        implicitFlowEnabled: true
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        redirectUris:
+          - https://odoo.burned.host/auth_oauth/signin
+        webOrigins:
+          - https://odoo.burned.host
+    displayName: Burned
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -408,6 +430,24 @@ spec:
     - backendRefs:
         - name: keycloak-service
           port: 8080
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: hq-bot-keycloak-password
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: hq-bot-keycloak-password
+  dataFrom:
+    - extract:
+        key: hq-bot-keycloak-password
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret

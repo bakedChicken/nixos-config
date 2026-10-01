@@ -89,7 +89,7 @@ spec:
       memory: 1Gi
   backup:
     volumeSnapshot:
-      className: tns-csi-nvmeof-snapshot
+      className: tns-csi-iscsi-snapshot
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       isWALArchiver: true

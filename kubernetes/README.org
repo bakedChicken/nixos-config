@@ -85,38 +85,37 @@ The cluster is managed in two layers, the platform only consuming what the infra
 
 Infrastructure (NixOS) - everything tied to the machines, or needed before Argo CD can run:
 
-+ [X] k3s, disks, firewall, agenix (join token, Cloudflare token, TrueNAS API key, OpenBao seal key, Argo CD registry credentials)
++ [X] k3s, disks, firewall, agenix (join token, Cloudflare token, TrueNAS API key, OpenBao seal key, Argo CD registry credentials, password hash of the Keycloak admin, RouterOS API user of mktxp)
 + [X] Cilium (CNI + service mesh + Gateway API implementation + Hubble), Gateway API CRDs, LoadBalancer IP pool
 + [X] kube-vip (control-plane VIP)
-+ [X] TrueNAS SCALE CSI driver (~tns-csi~, NVMe-oF, default StorageClass) + CSI snapshot CRDs and ~snapshot-controller~
-+ [X] OpenBao server (single replica on raft storage, static-seal auto-unseal, self-init that only creates vault-config-operator's login)
-+ [X] Argo CD, the ~platform~ project and its root Application (~infra/argocd-bootstrap.yaml~)
++ [X] TrueNAS SCALE CSI driver (~tns-csi~): ~tns-csi-iscsi~ (default, ReadWriteOnce) and ~tns-csi-nfs~ (ReadWriteMany), open-iscsi on the nodes, CSI snapshot CRDs and ~snapshot-controller~
++ [X] OpenBao server
++ [X] Argo CD itself
 
 Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its own resources. The root Application syncs the whole directory in sync waves, so everything starts after what it depends on:
 
-| Wave  | What                                                                                          |
-|-------+-----------------------------------------------------------------------------------------------|
-|    -1 | Namespaces                                                                                    |
-|     0 | cert-manager, CloudNativePG operator, Keycloak operator                                       |
-|    10 | vault-config-operator, External Secrets Operator, Barman Cloud plugin                         |
-|    20 | OpenBao contents (KV store, ESO access, generated secrets), ~ClusterSecretStore~              |
-| 29-32 | Saved TLS certificates restored, issuers, ~burned-gateway~, certificates saved back           |
-| 39-40 | ~default-postgres-cluster~ and its backups                                                    |
-| 50-52 | Keycloak: database grant, Keycloak at ~auth.burned.host~, ~homelab~ realm                     |
-| 59-63 | Keycloak login for OpenBao, RustFS and its ~rustfs-setup~ Job (buckets, users, policies)      |
-| 69-71 | Loki, Tempo, Grafana, Alloy, OpenTelemetry Operator, kube-state-metrics, Nisshi, Mimir       |
-|    80 | OpenTelemetry ~Instrumentation~                                                               |
+|  Wave | What                                                                                                             |
+|-------+------------------------------------------------------------------------------------------------------------------|
+|    -1 | Namespaces                                                                                                       |
+|     0 | cert-manager, CloudNativePG operator, Keycloak operator, Reloader                                                |
+|    10 | vault-config-operator, External Secrets Operator, Barman Cloud plugin                                            |
+|    20 | OpenBao contents (KV store, ESO access, generated secrets), ~ClusterSecretStore~                                 |
+| 29-32 | Saved TLS certificates restored, issuers, ~burned-gateway~, certificates saved back                              |
+| 39-40 | ~default-postgres-cluster~ and its backups                                                                       |
+| 50-52 | Keycloak: database grant, Keycloak at ~auth.burned.host~, ~burned~ realm                                         |
+| 59-63 | Keycloak login for OpenBao, RustFS and its ~rustfs-users~ Job (buckets, users, policies)                         |
+| 69-71 | Alerting rules, Loki, Tempo, Pyroscope, Grafana, k8s-monitoring (Alloy), OpenTelemetry Operator, VictoriaMetrics |
+|    72 | VMAlert, VMAlertmanager                                                                                          |
+|    80 | OpenTelemetry ~Instrumentation~                                                                                  |
+| 90-93 | Odoo at ~odoo.burned.host~: config module, database setup hook, 3 replicas                                       |
+| 94-96 | Paperclip at ~paperclip.burned.host~                                                                             |
+|   100 | mktxp (MikroTik exporter), scraped every 3m                                                                      |
 
-Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/openbao.yaml~, a line in the ~rustfs-setup~ Job and the ~rustfs-users~ secret in ~platform/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.
-
-Mimir runs as a single binary with Nisshi (S3-backed, Kafka-compatible) as its ingest buffer.
+Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/openbao.yaml~, a line in the ~rustfs-users~ Job and the ~rustfs-users~ secret in ~platform/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.
 
 Notes on non-obvious defaults/constraints:
 
-+ Cluster uses deterministic PVC names, to avoid orphaned claims during full wipe. All ~reclaimPolicy~ or ~deleteStrategy~ annotations serve the same purpose: prevent orphans and make sure the data is not wiped during cluster reinstall. A node wipe never touches TrueNAS: every retained dataset is re-adopted by name on reinstall. To really start an app from scratch, delete its datasets (and NVMe-oF subsystems) on TrueNAS while the cluster is down.
-+ Secrets: agenix only holds what must exist before the cluster is up. Everything else is generated once by a ~RandomSecret~ in OpenBao and never overwritten, so it survives a wipe together with OpenBao's datasets. Each namespace that needs a secret has its own ~ExternalSecret~.
-+ OpenBao's self-init runs once, on empty storage. The rest of its configuration lives in ~platform/openbao.yaml~ and is continuously reconciled by vault-config-operator.
-+ Let's Encrypt certificates are pushed from ~gateway-system~ into OpenBao and restored from there before the Gateway exists, to stay below the rate limit of 5 identical certificates per week.
-+ ~default-postgres-cluster~ carries ~cnpg.io/skipEmptyWalArchiveCheck~: after a reinstall its retained volumes continue the same database, so the WAL already in its backup path is its own. Argo CD never deletes it (~Prune=false,Delete=false~).
-+ Manifests in ~infra/~ are applied by k3s, which never deletes resources of a manifest removed from the configuration: delete its ~Addon~ by hand, or reinstall. Argo CD-managed layers don't have this problem.
-+ RustFS buckets, users and per-bucket policies are created by the ~rustfs-setup~ Job (RustFS ~rc~ CLI, re-runs whenever the Job changes). Passwords live in OpenBao, so they survive a wipe. 
++ Cluster uses deterministic PVC names, to avoid orphaned claims during full wipe. All ~reclaimPolicy~ or ~deleteStrategy~ annotations serve the same purpose: prevent orphans and make sure the data is not wiped during cluster reinstall. A node wipe never touches TrueNAS: every retained dataset is re-adopted by name on reinstall. To really start an app from scratch, delete its datasets on TrueNAS while the cluster is down.
++ Secrets: agenix only holds what must exist before the cluster is up.
++ RustFS buckets, users and per-bucket policies are created by the ~rustfs-users~ Job. Passwords live in OpenBao, so they survive a wipe.
+  

@@ -15,8 +15,7 @@
             };
             output = {
               Virtual-1 = {
-                mode = "5120x2160@60";
-                scale = 1.5;
+                scale = 2;
               };
             };
             input = {

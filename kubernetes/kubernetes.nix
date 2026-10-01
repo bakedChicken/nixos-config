@@ -87,7 +87,6 @@
           "iptables_filter"
           "iptables6_nat"
           "iptables6_filter"
-          "nvme-tcp"
         ];
 
         age.secrets = {
@@ -96,14 +95,17 @@
           truenas-api-key.rekeyFile = ./secrets/truenas-api-key.age;
           openbao-seal-key.rekeyFile = ./secrets/openbao-seal-key.age;
           argocd-ghcr-creds.rekeyFile = ./secrets/argocd-ghcr-credentials.age;
+          keycloak-admin-password.rekeyFile = ./secrets/keycloak-admin-password.age;
+          mktxp-credentials.rekeyFile = ./secrets/mktxp-credentials.age;
         };
 
         services.avahi.allowInterfaces = ["eth0"];
+        services.openiscsi = {
+          enable = true;
+          name = "iqn.2026-09.host.burned:${config.networking.hostName}";
+        };
 
-        # It's not documented anywhere, but apparantely TrueNAS can only ingest 1M writes over NVMe-oF
-        services.udev.extraRules = ''
-          ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*", ATTR{queue/max_sectors_kb}="1024"
-        '';
+        systemd.tmpfiles.rules = ["L+ /usr/sbin/iscsiadm - - - - ${config.services.openiscsi.package}/bin/iscsiadm"];
 
         networking = {
           dhcpcd.denyInterfaces = [
@@ -128,6 +130,7 @@
               9891
               9963
               9964
+              9100
               10250
             ];
             allowedUDPPorts = [
@@ -201,6 +204,8 @@
             truenas-api-key.source = config.age.secrets.truenas-api-key.path;
             openbao-seal-key.source = config.age.secrets.openbao-seal-key.path;
             argocd-ghcr-creds.source = config.age.secrets.argocd-ghcr-creds.path;
+            keycloak-admin-password.source = config.age.secrets.keycloak-admin-password.path;
+            mktxp-credentials.source = config.age.secrets.mktxp-credentials.path;
             cluster-ip-pool.source = ./infra/cluster-ip-pool.yaml;
             kube-vip.source = ./infra/kube-vip.yaml;
             argocd-bootstrap.source = ./infra/argocd-bootstrap.yaml;
@@ -266,11 +271,23 @@
                 storageClasses = [
                   {
                     enabled = true;
-                    name = "tns-csi-nvmeof";
-                    protocol = "nvmeof";
+                    name = "tns-csi-iscsi";
+                    protocol = "iscsi";
                     pool = "tank";
                     parentDataset = "tank/kubernetes";
                     isDefault = true;
+                    server = "172.16.30.53";
+                    nameTemplate = "{{ .PVCNamespace }}-{{ .PVCName }}";
+                    adoptExisting = "true";
+                    reclaimPolicy = "Retain";
+                    deleteStrategy = "retain";
+                  }
+                  {
+                    enabled = true;
+                    name = "tns-csi-nfs";
+                    protocol = "nfs";
+                    pool = "tank";
+                    parentDataset = "tank/kubernetes";
                     server = "172.16.30.53";
                     nameTemplate = "{{ .PVCNamespace }}-{{ .PVCName }}";
                     adoptExisting = "true";
@@ -411,16 +428,16 @@
                 dex.enabled = false;
                 configs.params."server.insecure" = true;
                 configs.params."controller.diff.server.side" = "true";
-                # Login through Keycloak; the client secret is generated in OpenBao (platform/keycloak.yaml).
+                configs.cm."admin.enabled" = false;
                 configs.cm."oidc.config" = ''
                   name: Keycloak
-                  issuer: https://auth.burned.host/realms/homelab
+                  issuer: https://auth.burned.host/realms/burned
                   clientID: argocd
                   clientSecret: $argocd-oidc-client-secret:client_secret
                   requestedScopes: ["openid", "profile", "email"]
                   enablePKCEAuthentication: true
                 '';
-                configs.rbac."policy.csv" = "g, admin, role:admin";
+                configs.rbac."policy.csv" = "g, admin, role:admin\ng, readonly, role:readonly";
                 configs.rbac.scopes = "[groups]";
                 configs.cm = {
                   "resource.customizations.health.argoproj.io_Application" = ''
