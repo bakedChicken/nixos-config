@@ -103,12 +103,12 @@ Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its ow
 | 29-32 | Saved TLS certificates restored, issuers, ~burned-gateway~, certificates saved back                              |
 | 39-40 | ~default-postgres-cluster~ and its backups                                                                       |
 | 50-52 | Keycloak: database grant, Keycloak at ~auth.burned.host~, ~burned~ realm                                         |
+| 53-54 | Keycloak clients added after the first realm import: ~keycloak-config~ Job (keycloak-config-cli). The operator never updates an existing realm |
 | 59-63 | Keycloak login for OpenBao, RustFS and its ~rustfs-users~ Job (buckets, users, policies)                         |
 | 69-71 | Alerting rules, Loki, Tempo, Pyroscope, Grafana, k8s-monitoring (Alloy), OpenTelemetry Operator, VictoriaMetrics |
 |    72 | VMAlert, VMAlertmanager                                                                                          |
 |    80 | OpenTelemetry ~Instrumentation~                                                                                  |
-| 90-93 | Odoo at ~odoo.burned.host~: config module, database setup hook, 3 replicas                                       |
-| 94-96 | Paperclip at ~paperclip.burned.host~                                                                             |
+| 94    | Nextcloud at ~nextcloud.burned.host~: work tracking (Deck, Tables) and files                         |
 |   100 | mktxp (MikroTik exporter), scraped every 3m                                                                      |
 
 Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/openbao.yaml~, a line in the ~rustfs-users~ Job and the ~rustfs-users~ secret in ~platform/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.

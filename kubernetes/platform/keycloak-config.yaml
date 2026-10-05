@@ -1,0 +1,100 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-oidc-client
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "53"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: nextcloud-oidc-client
+  dataFrom:
+    - extract:
+        key: nextcloud/nextcloud-oidc-client-secret
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-config
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "53"
+data:
+  burned.yaml: |
+    realm: burned
+    clients:
+        - clientId: nextcloud
+          name: Nextcloud
+          enabled: true
+          clientAuthenticatorType: client-secret
+          secret: "$(env:NEXTCLOUD_CLIENT_SECRET)"
+          publicClient: false
+          standardFlowEnabled: true
+          implicitFlowEnabled: false
+          directAccessGrantsEnabled: false
+          serviceAccountsEnabled: false
+          redirectUris:
+            - "https://nextcloud.burned.host/*"
+          webOrigins:
+            - "https://nextcloud.burned.host"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-config
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "54"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: keycloak-config-cli
+          image: docker.io/adorsys/keycloak-config-cli:6.5.1-26.5.5
+          env:
+            - name: KEYCLOAK_URL
+              value: http://keycloak-service.keycloak.svc.cluster.local:8080
+            - name: KEYCLOAK_USER
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-initial-admin
+                  key: username
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-initial-admin
+                  key: password
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: 300s
+            - name: IMPORT_FILES_LOCATIONS
+              value: /config/burned.yaml
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            - name: NEXTCLOUD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-oidc-client
+                  key: client_secret
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: keycloak-config

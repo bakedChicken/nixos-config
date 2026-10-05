@@ -5,7 +5,11 @@
   ...
 }: {
   # Push kubernetes/platform from the working tree to ghcr.io, where Argo CD syncs it from.
-  perSystem = {pkgs, ...}: {
+  perSystem = {
+    pkgs,
+    inputs',
+    ...
+  }: {
     apps.push-platform = {
       type = "app";
       program = pkgs.lib.getExe (pkgs.writeShellApplication {
@@ -22,9 +26,14 @@
           if [ -n "$(git status --porcelain -- .)" ]; then
             dirty=true
           fi
+          revision=$(git rev-parse HEAD)
+          staging=$(mktemp -d)
+          trap 'rm -rf "$staging"' EXIT
+          cp -r . "$staging"
+          cd "$staging"
           oras push --username bakedchicken --password-stdin \
             --annotation "org.opencontainers.image.source=https://github.com/bakedchicken/nixos-config" \
-            --annotation "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
+            --annotation "org.opencontainers.image.revision=$revision" \
             --annotation "host.burned.dirty=$dirty" \
             ghcr.io/bakedchicken/homelab-platform:latest . < "$token"
         '';

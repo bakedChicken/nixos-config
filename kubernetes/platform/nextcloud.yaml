@@ -1,0 +1,277 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: nextcloud
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: nextcloud
+  login: true
+  ensure: present
+  passwordSecret:
+    name: nextcloud-pg-creds
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: nextcloud
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: nextcloud
+  owner: nextcloud
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-pg-creds
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: nextcloud-pg-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: nextcloud
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: nextcloud/nextcloud-db-password
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-db-creds
+  namespace: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: nextcloud-db-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: nextcloud
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: nextcloud/nextcloud-db-password
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-admin
+  namespace: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: nextcloud-admin
+    template:
+      type: Opaque
+      data:
+        username: admin
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: nextcloud/nextcloud-admin-password
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-oidc-client
+  namespace: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: nextcloud-oidc-client
+  dataFrom:
+    - extract:
+        key: nextcloud/nextcloud-oidc-client-secret
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nextcloud
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nextcloud
+  source:
+    repoURL: https://nextcloud.github.io/helm/
+    chart: nextcloud
+    targetRevision: 9.4.0
+    helm:
+      releaseName: nextcloud
+      valuesObject:
+        image:
+          flavor: apache
+        nextcloud:
+          host: nextcloud.burned.host
+          trustedDomains:
+            - nextcloud.burned.host
+          existingSecret:
+            enabled: true
+            secretName: nextcloud-admin
+            usernameKey: username
+            passwordKey: password
+          extraEnv:
+            - name: OVERWRITEPROTOCOL
+              value: https
+            - name: OVERWRITECLIURL
+              value: https://nextcloud.burned.host
+            - name: TRUSTED_PROXIES
+              value: 10.42.0.0/16
+            - name: AGENTS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-agents
+                  key: password
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-oidc-client
+                  key: client_secret
+          hooks:
+            before-starting: |-
+              php /var/www/html/occ app:install user_oidc || php /var/www/html/occ app:enable user_oidc
+              php /var/www/html/occ app:install deck || php /var/www/html/occ app:enable deck
+              php /var/www/html/occ app:install tables || php /var/www/html/occ app:enable tables
+              php /var/www/html/occ user_oidc:provider Keycloak --clientid=nextcloud --clientsecret="$OIDC_CLIENT_SECRET" --discoveryuri=https://auth.burned.host/realms/burned/.well-known/openid-configuration --unique-uid=0 --mapping-uid=preferred_username --mapping-display-name=name --mapping-email=email
+              php /var/www/html/occ user:info agents >/dev/null 2>&1 || OC_PASS="$AGENTS_PASSWORD" php /var/www/html/occ user:add --password-from-env --display-name=Agents agents
+              OC_PASS="$AGENTS_PASSWORD" php /var/www/html/occ user:resetpassword --password-from-env agents >/dev/null
+              for app in firstrunwizard recommendations photos dashboard weather_status user_status survey_client support contactsinteraction privacy nextcloud_announcements; do php /var/www/html/occ app:disable $app >/dev/null 2>&1 || true; done
+          configs:
+            burned.config.php: |-
+              <?php
+              $CONFIG = array (
+                "trusted_domains" => array ("nextcloud.burned.host", "localhost"),
+                "overwriteprotocol" => "https",
+                "overwrite.cli.url" => "https://nextcloud.burned.host",
+                "trusted_proxies" => array ("10.42.0.0/16", "fd42::/48"),
+                "allow_local_remote_servers" => true,
+                "skeletondirectory" => "",
+                "templatedirectory" => "",
+                "defaultapp" => "files",
+              );
+        internalDatabase:
+          enabled: false
+        externalDatabase:
+          enabled: true
+          type: postgresql
+          host: default-postgres-cluster-rw.postgres.svc.cluster.local
+          database: nextcloud
+          existingSecret:
+            enabled: true
+            secretName: nextcloud-db-creds
+            usernameKey: username
+            passwordKey: password
+        persistence:
+          enabled: true
+          storageClass: tns-csi-iscsi
+          size: 20Gi
+        startupProbe:
+          enabled: true
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 60
+        cronjob:
+          enabled: true
+          type: sidecar
+        resources:
+          requests:
+            cpu: 100m
+            memory: 768Mi
+          limits:
+            memory: 2Gi
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+spec:
+  parentRefs:
+    - name: burned-gateway
+      namespace: gateway-system
+      sectionName: wildcard-https
+  hostnames:
+    - nextcloud.burned.host
+  rules:
+    - backendRefs:
+        - name: nextcloud
+          port: 8080
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-agents
+  namespace: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: nextcloud-agents
+  data:
+    - secretKey: password
+      remoteRef:
+        key: nextcloud/nextcloud-agents-password
+        property: password
