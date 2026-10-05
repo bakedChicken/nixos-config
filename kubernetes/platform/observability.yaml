@@ -44,7 +44,7 @@ spec:
         password: "{{ .password }}"
   dataFrom:
     - extract:
-        key: grafana-postgres-creds
+        key: grafana/postgres
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -62,7 +62,7 @@ spec:
     name: grafana-postgres-creds
   dataFrom:
     - extract:
-        key: grafana-postgres-creds
+        key: grafana/postgres
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -80,7 +80,7 @@ spec:
     name: grafana-oidc-client-secret
   dataFrom:
     - extract:
-        key: grafana-oidc-client-secret
+        key: grafana/oidc-client
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -689,7 +689,7 @@ spec:
         AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
   dataFrom:
     - extract:
-        key: loki-rustfs
+        key: loki/rustfs
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -711,7 +711,7 @@ spec:
         AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
   dataFrom:
     - extract:
-        key: tempo-rustfs
+        key: tempo/rustfs
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -733,7 +733,7 @@ spec:
         AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
   dataFrom:
     - extract:
-        key: pyroscope-rustfs
+        key: pyroscope/rustfs
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application

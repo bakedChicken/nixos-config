@@ -14,7 +14,7 @@ spec:
     name: nextcloud-oidc-client
   dataFrom:
     - extract:
-        key: nextcloud/nextcloud-oidc-client-secret
+        key: nextcloud/oidc-client
 ---
 apiVersion: v1
 kind: ConfigMap

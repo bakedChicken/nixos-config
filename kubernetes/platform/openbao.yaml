@@ -118,7 +118,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: openbao-oidc-client-secret
+  name: openbao.oidc-client
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -129,7 +129,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/openbao
+  name: oidc-client
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: client_secret
@@ -144,7 +145,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: grafana-oidc-client-secret
+  name: grafana.oidc-client
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -155,7 +156,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/grafana
+  name: oidc-client
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: client_secret
@@ -170,7 +172,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: rustfs-oidc-client-secret
+  name: rustfs.oidc-client
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -181,7 +183,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/rustfs
+  name: oidc-client
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: client_secret
@@ -196,7 +199,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: grafana-postgres-creds
+  name: grafana.postgres
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -207,7 +210,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/grafana
+  name: postgres
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: password
@@ -222,7 +226,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: rustfs-root
+  name: rustfs.root
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -233,7 +237,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/rustfs
+  name: root
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: secret_key
@@ -248,7 +253,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: postgres-backup-rustfs
+  name: postgres.backup-rustfs
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -259,7 +264,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/postgres
+  name: backup-rustfs
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: secret_key
@@ -274,7 +280,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: loki-rustfs
+  name: loki.rustfs
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -285,7 +291,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/loki
+  name: rustfs
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: secret_key
@@ -300,7 +307,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: tempo-rustfs
+  name: tempo.rustfs
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -311,7 +318,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/tempo
+  name: rustfs
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: secret_key
@@ -326,7 +334,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: pyroscope-rustfs
+  name: pyroscope.rustfs
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -337,7 +345,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/pyroscope
+  name: rustfs
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: secret_key
@@ -352,7 +361,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: keycloak-postgres-creds
+  name: keycloak.postgres
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -363,7 +372,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/keycloak
+  name: postgres
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: password
@@ -488,12 +498,12 @@ spec:
     name: openbao-oidc-client-secret
   dataFrom:
     - extract:
-        key: openbao-oidc-client-secret
+        key: openbao/oidc-client
 ---
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: argocd-oidc-client-secret
+  name: argocd.oidc-client
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -504,7 +514,8 @@ spec:
     role: vault-config-operator
     serviceAccount:
       name: vault-config-operator
-  path: secret/data
+  path: secret/data/argocd
+  name: oidc-client
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: client_secret
@@ -520,7 +531,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: nextcloud-oidc-client-secret
+  name: nextcloud.oidc-client
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -532,6 +543,7 @@ spec:
     serviceAccount:
       name: vault-config-operator
   path: secret/data/nextcloud
+  name: oidc-client
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: client_secret
@@ -546,7 +558,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: nextcloud-db-password
+  name: nextcloud.db
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -558,6 +570,7 @@ spec:
     serviceAccount:
       name: vault-config-operator
   path: secret/data/nextcloud
+  name: db
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: password
@@ -572,7 +585,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: nextcloud-admin-password
+  name: nextcloud.admin
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -584,6 +597,7 @@ spec:
     serviceAccount:
       name: vault-config-operator
   path: secret/data/nextcloud
+  name: admin
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: password
@@ -598,7 +612,7 @@ spec:
 apiVersion: redhatcop.redhat.io/v1alpha1
 kind: RandomSecret
 metadata:
-  name: nextcloud-agents-password
+  name: nextcloud.agents
   namespace: openbao
   annotations:
     argocd.argoproj.io/sync-wave: "20"
@@ -610,6 +624,7 @@ spec:
     serviceAccount:
       name: vault-config-operator
   path: secret/data/nextcloud
+  name: agents
   isKVSecretsEngineV2: true
   kvSecretRetainPolicy: Retain
   secretKey: password

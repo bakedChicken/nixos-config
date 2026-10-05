@@ -90,7 +90,7 @@ spec:
         password: "{{ .password }}"
   dataFrom:
     - extract:
-        key: keycloak-postgres-creds
+        key: keycloak/postgres
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -113,7 +113,7 @@ spec:
         password: "{{ .password }}"
   dataFrom:
     - extract:
-        key: keycloak-postgres-creds
+        key: keycloak/postgres
 ---
 apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
@@ -347,7 +347,7 @@ spec:
     name: rustfs-oidc-client-secret
   dataFrom:
     - extract:
-        key: rustfs-oidc-client-secret
+        key: rustfs/oidc-client
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -365,7 +365,7 @@ spec:
     name: grafana-oidc-client-secret
   dataFrom:
     - extract:
-        key: grafana-oidc-client-secret
+        key: grafana/oidc-client
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -383,7 +383,7 @@ spec:
     name: openbao-oidc-client-secret
   dataFrom:
     - extract:
-        key: openbao-oidc-client-secret
+        key: openbao/oidc-client
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -420,7 +420,7 @@ spec:
     name: argocd-oidc-client-secret
   dataFrom:
     - extract:
-        key: argocd-oidc-client-secret
+        key: argocd/oidc-client
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -442,4 +442,4 @@ spec:
           app.kubernetes.io/part-of: argocd
   dataFrom:
     - extract:
-        key: argocd-oidc-client-secret
+        key: argocd/oidc-client

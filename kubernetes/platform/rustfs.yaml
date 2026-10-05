@@ -25,7 +25,7 @@ spec:
         RUSTFS_SECRET_KEY: "{{ .secret_key }}"
   dataFrom:
     - extract:
-        key: rustfs-root
+        key: rustfs/root
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -43,7 +43,7 @@ spec:
     name: rustfs-oidc-client-secret
   dataFrom:
     - extract:
-        key: rustfs-oidc-client-secret
+        key: rustfs/oidc-client
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -62,19 +62,19 @@ spec:
   data:
     - secretKey: postgres-backup
       remoteRef:
-        key: postgres-backup-rustfs
+        key: postgres/backup-rustfs
         property: secret_key
     - secretKey: loki
       remoteRef:
-        key: loki-rustfs
+        key: loki/rustfs
         property: secret_key
     - secretKey: tempo
       remoteRef:
-        key: tempo-rustfs
+        key: tempo/rustfs
         property: secret_key
     - secretKey: pyroscope
       remoteRef:
-        key: pyroscope-rustfs
+        key: pyroscope/rustfs
         property: secret_key
 ---
 apiVersion: argoproj.io/v1alpha1

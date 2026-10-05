@@ -57,7 +57,7 @@ spec:
         password: "{{ .password }}"
   dataFrom:
     - extract:
-        key: nextcloud/nextcloud-db-password
+        key: nextcloud/db
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -80,7 +80,7 @@ spec:
         password: "{{ .password }}"
   dataFrom:
     - extract:
-        key: nextcloud/nextcloud-db-password
+        key: nextcloud/db
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -103,7 +103,7 @@ spec:
         password: "{{ .password }}"
   dataFrom:
     - extract:
-        key: nextcloud/nextcloud-admin-password
+        key: nextcloud/admin
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -121,7 +121,7 @@ spec:
     name: nextcloud-oidc-client
   dataFrom:
     - extract:
-        key: nextcloud/nextcloud-oidc-client-secret
+        key: nextcloud/oidc-client
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -273,5 +273,5 @@ spec:
   data:
     - secretKey: password
       remoteRef:
-        key: nextcloud/nextcloud-agents-password
+        key: nextcloud/agents
         property: password

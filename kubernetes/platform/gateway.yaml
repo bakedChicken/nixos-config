@@ -159,7 +159,7 @@ spec:
           cert-manager.io/uri-sans: ""
   dataFrom:
     - extract:
-        key: burned-host-tls
+        key: gateway/tls
 ---
 apiVersion: external-secrets.io/v1alpha1
 kind: PushSecret
@@ -181,12 +181,12 @@ spec:
     - match:
         secretKey: tls.crt
         remoteRef:
-          remoteKey: burned-host-tls
+          remoteKey: gateway/tls
           property: tls.crt
     - match:
         secretKey: tls.key
         remoteRef:
-          remoteKey: burned-host-tls
+          remoteKey: gateway/tls
           property: tls.key
 ---
 apiVersion: external-secrets.io/v1
@@ -221,7 +221,7 @@ spec:
           cert-manager.io/uri-sans: ""
   dataFrom:
     - extract:
-        key: burned-host-internal-tls
+        key: gateway/tls-internal
 ---
 apiVersion: external-secrets.io/v1alpha1
 kind: PushSecret
@@ -243,10 +243,10 @@ spec:
     - match:
         secretKey: tls.crt
         remoteRef:
-          remoteKey: burned-host-internal-tls
+          remoteKey: gateway/tls-internal
           property: tls.crt
     - match:
         secretKey: tls.key
         remoteRef:
-          remoteKey: burned-host-internal-tls
+          remoteKey: gateway/tls-internal
           property: tls.key
