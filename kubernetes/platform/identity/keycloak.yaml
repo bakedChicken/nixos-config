@@ -29,6 +29,7 @@ spec:
         - port: 15008
           protocol: TCP
 ---
+apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: keycloak

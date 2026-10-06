@@ -13,7 +13,7 @@ metadata:
   name: rustfs-root-creds
   namespace: rustfs-system
   annotations:
-    argocd.argoproj.io/sync-wave: "59"
+    argocd.argoproj.io/sync-wave: "33"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   secretStoreRef:
@@ -35,7 +35,7 @@ metadata:
   name: rustfs-oidc-client-secret
   namespace: rustfs-system
   annotations:
-    argocd.argoproj.io/sync-wave: "59"
+    argocd.argoproj.io/sync-wave: "33"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   secretStoreRef:
@@ -53,7 +53,7 @@ metadata:
   name: rustfs-users
   namespace: rustfs-system
   annotations:
-    argocd.argoproj.io/sync-wave: "59"
+    argocd.argoproj.io/sync-wave: "33"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   secretStoreRef:
@@ -85,7 +85,7 @@ metadata:
   name: rustfs
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "60"
+    argocd.argoproj.io/sync-wave: "34"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -246,7 +246,7 @@ metadata:
   name: rustfs-console-redirect
   namespace: rustfs-system
   annotations:
-    argocd.argoproj.io/sync-wave: "61"
+    argocd.argoproj.io/sync-wave: "35"
 spec:
   parentRefs:
     - name: burned-gateway

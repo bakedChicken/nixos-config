@@ -92,28 +92,17 @@ Infrastructure (NixOS) - everything tied to the machines, or needed before Argo 
 + [X] OpenBao server
 + [X] Argo CD itself
 
-Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its own resources. The root Application syncs the whole directory in sync waves, so everything starts after what it depends on:
+Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its own resources, in groups. The root Application (~infra/argocd-bootstrap.yaml~) syncs only ~platform/groups.yaml~: one Application per group, each syncing its own directory. Groups sync side by side and retry until what they need from another group exists, so one stuck group never holds back the others; inside a group, sync waves (~-1~ for namespaces) keep the order:
 
-|  Wave | What                                                                                                             |
-|-------+------------------------------------------------------------------------------------------------------------------|
-|    -1 | Namespaces                                                                                                       |
-|     0 | cert-manager, CloudNativePG operator, Keycloak operator, Reloader                                                |
-|   1-3 | Istio (ambient): CRDs, istiod, istio-cni, ztunnel                                                                |
-|    10 | vault-config-operator, External Secrets Operator, Barman Cloud plugin                                            |
-|    20 | OpenBao contents (KV store, ESO access, generated secrets), ~ClusterSecretStore~                                 |
-| 29-32 | Saved TLS certificates restored, issuers, ~burned-gateway~, certificates saved back                              |
-| 39-40 | ~default-postgres-cluster~ and its backups                                                                       |
-| 50-52 | Keycloak: database grant, Keycloak at ~auth.burned.host~, ~burned~ realm                                         |
-| 53-54 | Keycloak clients added after the first realm import: ~keycloak-config~ Job (keycloak-config-cli). The operator never updates an existing realm |
-| 59-63 | Keycloak login for OpenBao, RustFS and its ~rustfs-users~ Job (buckets, users, policies)                         |
-| 69-71 | Alerting rules, Loki, Tempo, Pyroscope, Grafana, k8s-monitoring (Alloy), OpenTelemetry Operator, VictoriaMetrics |
-|    72 | VMAlert, VMAlertmanager                                                                                          |
-|    80 | OpenTelemetry ~Instrumentation~                                                                                  |
-| 94    | Nextcloud at ~nextcloud.burned.host~: work tracking (Deck, Tables) and files                         |
-| 95-96 | Kiali at ~kiali.internal.k8s.burned.host~: Istio service graph, Keycloak sign-in                                 |
-|   100 | mktxp (MikroTik exporter), scraped every 3m                                                                      |
+| Group            | What (sync waves)                                                                                                                                                                                                                   |
+|------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ~foundation/~    | cert-manager, Reloader (0); Istio ambient (1-3); vault-config-operator, External Secrets (10); OpenBao contents, ~ClusterSecretStore~ (20); TLS certificates, issuers, ~burned-gateway~ (29-32); Keycloak login for OpenBao (59-60) |
+| ~data/~          | CloudNativePG operator (0); Barman Cloud plugin (10); RustFS with its ~rustfs-users~ Job (33-35); ~default-postgres-cluster~ and its backups to RustFS (39-40)                                                                      |
+| ~identity/~      | Keycloak operator (0); database, Keycloak at ~auth.burned.host~, ~burned~ realm (50-52); clients added later by the ~keycloak-config~ Job (53-54), as the operator never updates an existing realm                                  |
+| ~observability/~ | Alerting rules, Loki, Tempo, Pyroscope, Grafana, Alloy, OpenTelemetry Operator, VictoriaMetrics (69-72); ~Instrumentation~ (80); Kiali (95-96); mktxp (100)                                                                         |
+| ~apps/~          | Nextcloud at ~nextcloud.burned.host~ (94); Cloudflare tunnel (95)                                                                                                                                                                   |
 
-Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/openbao.yaml~, a line in the ~rustfs-users~ Job and the ~rustfs-users~ secret in ~platform/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.
+Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/identity/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/foundation/openbao.yaml~, a line in the ~rustfs-users~ Job and the ~rustfs-users~ secret in ~platform/data/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.
 
 Notes on non-obvious defaults/constraints:
 
