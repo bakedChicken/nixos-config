@@ -16,6 +16,24 @@ spec:
     - extract:
         key: nextcloud/oidc-client
 ---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: kiali-oidc-client
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "53"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: kiali-oidc-client
+  dataFrom:
+    - extract:
+        key: kiali/oidc-client
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -41,6 +59,20 @@ data:
             - "https://nextcloud.burned.host/*"
           webOrigins:
             - "https://nextcloud.burned.host"
+        - clientId: kiali
+          name: Kiali
+          enabled: true
+          clientAuthenticatorType: client-secret
+          secret: "$(env:KIALI_CLIENT_SECRET)"
+          publicClient: false
+          standardFlowEnabled: true
+          implicitFlowEnabled: false
+          directAccessGrantsEnabled: false
+          serviceAccountsEnabled: false
+          redirectUris:
+            - "https://kiali.internal.k8s.burned.host/*"
+          webOrigins:
+            - "https://kiali.internal.k8s.burned.host"
 ---
 apiVersion: batch/v1
 kind: Job
@@ -84,6 +116,11 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: nextcloud-oidc-client
+                  key: client_secret
+            - name: KIALI_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kiali-oidc-client
                   key: client_secret
           volumeMounts:
             - name: config

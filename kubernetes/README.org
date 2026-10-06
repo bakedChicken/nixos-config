@@ -98,6 +98,7 @@ Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its ow
 |-------+------------------------------------------------------------------------------------------------------------------|
 |    -1 | Namespaces                                                                                                       |
 |     0 | cert-manager, CloudNativePG operator, Keycloak operator, Reloader                                                |
+|   1-3 | Istio (ambient): CRDs, istiod, istio-cni, ztunnel                                                                |
 |    10 | vault-config-operator, External Secrets Operator, Barman Cloud plugin                                            |
 |    20 | OpenBao contents (KV store, ESO access, generated secrets), ~ClusterSecretStore~                                 |
 | 29-32 | Saved TLS certificates restored, issuers, ~burned-gateway~, certificates saved back                              |
@@ -109,6 +110,7 @@ Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its ow
 |    72 | VMAlert, VMAlertmanager                                                                                          |
 |    80 | OpenTelemetry ~Instrumentation~                                                                                  |
 | 94    | Nextcloud at ~nextcloud.burned.host~: work tracking (Deck, Tables) and files                         |
+| 95-96 | Kiali at ~kiali.internal.k8s.burned.host~: Istio service graph, Keycloak sign-in                                 |
 |   100 | mktxp (MikroTik exporter), scraped every 3m                                                                      |
 
 Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/openbao.yaml~, a line in the ~rustfs-users~ Job and the ~rustfs-users~ secret in ~platform/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.

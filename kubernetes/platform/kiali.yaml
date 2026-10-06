@@ -1,0 +1,137 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: kiali
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "95"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: kiali
+    template:
+      data:
+        oidc-secret: "{{ .client_secret }}"
+  dataFrom:
+    - extract:
+        key: kiali/oidc-client
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: kiali-signing-key
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "95"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: kiali-signing-key
+  dataFrom:
+    - extract:
+        key: kiali/signing-key
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kiali
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "96"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  sources:
+    - repoURL: https://kiali.org/helm-charts
+      chart: kiali-server
+      targetRevision: 2.32.0
+      helm:
+        valuesObject:
+          auth:
+            strategy: openid
+            openid:
+              client_id: kiali
+              issuer_uri: https://auth.burned.host/realms/burned
+              disable_rbac: true
+              scopes:
+                - openid
+                - profile
+                - email
+              username_claim: preferred_username
+          login_token:
+            signing_key: secret:kiali-signing-key:key
+          deployment:
+            replicas: 2
+            affinity:
+              pod_anti:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchLabels:
+                          app.kubernetes.io/name: kiali
+                      topologyKey: kubernetes.io/hostname
+            pod_disruption_budget:
+              spec:
+                minAvailable: 1
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits:
+                memory: 1Gi
+          external_services:
+            prometheus:
+              url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
+            grafana:
+              enabled: false
+            tracing:
+              enabled: false
+          server:
+            web_root: /
+            web_fqdn: kiali.internal.k8s.burned.host
+            web_port: "443"
+            web_schema: https
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kiali
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "96"
+spec:
+  parentRefs:
+    - name: burned-gateway
+      namespace: gateway-system
+      sectionName: internal-https
+  hostnames:
+    - kiali.internal.k8s.burned.host
+  rules:
+    - backendRefs:
+        - name: kiali
+          port: 20001

@@ -244,6 +244,7 @@
                 extraConfig.enable-ipv6-ndp = "true";
                 extraConfig.ipv6-mcast-device = "eth0";
                 kubeProxyReplacement = true;
+                cni.exclusive = false;
                 hubble.relay.enabled = true;
                 gatewayAPI = {
                   enabled = true;
