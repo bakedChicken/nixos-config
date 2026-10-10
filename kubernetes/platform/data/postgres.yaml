@@ -84,6 +84,20 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false,SkipDryRunOnMissingResource=true
 spec:
   instances: 3
+  # Restores the newest base backup plus archived WAL from RustFS. Bootstrap is only
+  # used when the cluster is created, so this is what a reinstall runs instead of
+  # initdb, which would wipe the re-adopted volumes. A brand-new environment with an
+  # empty bucket needs initdb once.
+  bootstrap:
+    recovery:
+      source: default-postgres-cluster
+  externalClusters:
+    - name: default-postgres-cluster
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: postgres-backups
+          serverName: default-postgres-cluster
   inheritedMetadata:
     annotations:
       prometheus.io/scrape: "true"
@@ -142,6 +156,24 @@ spec:
   cluster:
     name: default-postgres-cluster
   method: volumeSnapshot
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: default-postgres-cluster-daily-objectstore
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  schedule: "0 30 3 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: default-postgres-cluster
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret

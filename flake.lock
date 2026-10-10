@@ -251,6 +251,32 @@
         "type": "github"
       }
     },
+    "nixos-raspberry-pi-uefi": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": [
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791543569,
+        "narHash": "sha256-jOxqFHZKfQ43LJyPHVWN4yY5a2o9Xad1X3DU0yBF76Y=",
+        "owner": "bakedChicken",
+        "repo": "nixos-raspberry-pi-uefi",
+        "rev": "e9132c095fa8b4fdee35f96f9fba3db7232673d6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bakedChicken",
+        "repo": "nixos-raspberry-pi-uefi",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1791048980,
@@ -371,6 +397,7 @@
         "disko": "disko",
         "flake-parts": "flake-parts_2",
         "home-manager": "home-manager",
+        "nixos-raspberry-pi-uefi": "nixos-raspberry-pi-uefi",
         "nixpkgs": "nixpkgs",
         "noctalia": "noctalia",
         "nvf": "nvf",

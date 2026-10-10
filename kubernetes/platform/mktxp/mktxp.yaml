@@ -1,17 +1,8 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: mktxp
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: mktxp-config
   namespace: mktxp
-  annotations:
-    argocd.argoproj.io/sync-wave: "100"
 data:
   mktxp.conf: |
     [Yekaterinburg-Mikrotik-hAP-ax3]
@@ -201,7 +192,6 @@ metadata:
   namespace: mktxp
   annotations:
     reloader.stakater.com/auto: "true"
-    argocd.argoproj.io/sync-wave: "100"
 spec:
   replicas: 1
   selector:

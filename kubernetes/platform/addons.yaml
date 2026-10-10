@@ -1,0 +1,234 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: reloader
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - cluster: main
+            server: https://kubernetes.default.svc
+          - cluster: edge
+            server: https://edge.burned.host:6443
+  template:
+    metadata:
+      name: "reloader-{{ .cluster }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      destination:
+        server: "{{ .server }}"
+        namespace: reloader
+      sources:
+        - repoURL: https://stakater.github.io/stakater-charts
+          chart: reloader
+          targetRevision: 2.2.17
+          helm:
+            releaseName: reloader
+            valuesObject:
+              reloader:
+                enableHA: true
+                reloadStrategy: annotations
+                deployment:
+                  replicas: 2
+                  affinity:
+                    podAntiAffinity:
+                      preferredDuringSchedulingIgnoredDuringExecution:
+                        - weight: 100
+                          podAffinityTerm:
+                            labelSelector:
+                              matchLabels:
+                                app: reloader-reloader
+                            topologyKey: kubernetes.io/hostname
+                  resources:
+                    requests:
+                      cpu: 10m
+                      memory: 64Mi
+                    limits:
+                      memory: 256Mi
+                  pod:
+                    annotations:
+                      prometheus.io/scrape: "true"
+                      prometheus.io/port: "9090"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: -1
+          refresh: true
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring-agent
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - cluster: edge
+            server: https://edge.burned.host:6443
+            hub: internal.k8s.burned.host
+  template:
+    metadata:
+      name: "monitoring-agent-{{ .cluster }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      destination:
+        server: "{{ .server }}"
+        namespace: observability
+      sources:
+        - repoURL: https://grafana.github.io/helm-charts
+          chart: k8s-monitoring
+          targetRevision: 4.5.2
+          helm:
+            releaseName: k8s-monitoring
+            valuesObject:
+              cluster:
+                name: "{{ .cluster }}"
+              destinations:
+                metrics:
+                  type: prometheus
+                  url: "https://vminsert.{{ .hub }}/insert/0/prometheus/api/v1/write"
+                logs:
+                  type: loki
+                  url: "https://loki.{{ .hub }}/loki/api/v1/push"
+              clusterMetrics:
+                enabled: true
+                collector: alloy-metrics
+                kube-state-metrics:
+                  jobLabel: kube-state-metrics
+                  metricsTuning:
+                    useDefaultAllowList: false
+                kubelet:
+                  jobLabel: kubelet
+                  metricsTuning:
+                    useDefaultAllowList: false
+                  extraDiscoveryRules: |
+                    rule {
+                      target_label = "metrics_path"
+                      replacement  = "/metrics"
+                    }
+                kubeletResource:
+                  jobLabel: kubelet
+                  extraDiscoveryRules: |
+                    rule {
+                      target_label = "metrics_path"
+                      replacement  = "/metrics/resource"
+                    }
+                cadvisor:
+                  jobLabel: kubelet
+                  metricsTuning:
+                    useDefaultAllowList: false
+                  extraDiscoveryRules: |
+                    rule {
+                      target_label = "metrics_path"
+                      replacement  = "/metrics/cadvisor"
+                    }
+              hostMetrics:
+                enabled: true
+                collector: alloy-metrics
+                linuxHosts:
+                  enabled: true
+                  jobLabel: node-exporter
+                  metricsTuning:
+                    useDefaultAllowList: false
+              annotationAutodiscovery:
+                enabled: true
+                collector: alloy-metrics
+                annotations:
+                  scrape: prometheus.io/scrape
+                  metricsPath: prometheus.io/path
+                  metricsPortNumber: prometheus.io/port
+              podLogsViaLoki:
+                enabled: true
+                collector: alloy-logs
+              nodeLogs:
+                enabled: true
+                collector: alloy-logs
+              clusterEvents:
+                enabled: true
+                collector: alloy-singleton
+              collectors:
+                alloy-metrics:
+                  presets: [clustered, statefulset]
+                alloy-logs:
+                  presets: [filesystem-log-reader, daemonset]
+                alloy-singleton:
+                  presets: [singleton]
+              telemetryServices:
+                kube-state-metrics:
+                  deploy: true
+                node-exporter:
+                  deploy: true
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: -1
+          refresh: true
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mktxp
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - cluster: edge
+            server: https://edge.burned.host:6443
+  template:
+    metadata:
+      name: "mktxp-{{ .cluster }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      destination:
+        server: "{{ .server }}"
+        namespace: mktxp
+      source:
+        repoURL: oci://ghcr.io/bakedchicken/platform
+        targetRevision: latest
+        path: mktxp
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - ServerSideApply=true
+        retry:
+          limit: -1
+          refresh: true
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m

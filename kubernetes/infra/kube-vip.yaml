@@ -81,7 +81,7 @@ spec:
             - name: vip_subnet
               value: "32"
             - name: dns_mode
-              value: dual
+              value: ipv4
             - name: dhcp_mode
               value: dual
             - name: cp_enable

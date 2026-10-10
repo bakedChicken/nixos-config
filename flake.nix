@@ -4,6 +4,13 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
+    nixos-raspberry-pi-uefi = {
+      url = "github:bakedChicken/nixos-raspberry-pi-uefi";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
+      inputs.treefmt-nix.follows = "treefmt-nix";
+    };
+
     umbriel = {
       url = "git+https://github.com/noctalia-dev/umbriel";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -163,6 +170,11 @@
               virtualisation.hypervGuest.enable = true;
             };
 
+            qemu-vm = {modulesPath, ...}: {
+              imports = ["${modulesPath}/profiles/qemu-guest.nix"];
+              services.qemuGuest.enable = true;
+            };
+
             common-bloat-module = {pkgs, ...}: {
               imports = [
                 home-manager.nixosModules.default
@@ -230,7 +242,7 @@
                 enable = true;
                 settings = {
                   connection = {
-                    "ipv4.clat" = "auto";
+                    "ipv4.clat" = 1; # auto
                   };
                 };
               };
@@ -261,6 +273,9 @@
 
               time.timeZone = "Europe/Vienna";
               i18n.defaultLocale = "en_US.UTF-8";
+
+              documentation.enable = false;
+              documentation.nixos.enable = false;
 
               nixpkgs.config.allowUnfree = true;
               system.stateVersion = "25.11";

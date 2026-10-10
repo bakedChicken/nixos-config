@@ -10,6 +10,8 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
+    - server: https://edge.burned.host:6443
+      namespace: '*'
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"
@@ -25,7 +27,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   source:
-    repoURL: oci://ghcr.io/bakedchicken/homelab-platform
+    repoURL: oci://ghcr.io/bakedchicken/platform
     targetRevision: latest
     path: .
   syncPolicy:

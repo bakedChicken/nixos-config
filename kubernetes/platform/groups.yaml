@@ -9,7 +9,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   source:
-    repoURL: oci://ghcr.io/bakedchicken/homelab-platform
+    repoURL: oci://ghcr.io/bakedchicken/platform
     targetRevision: latest
     path: foundation
   syncPolicy:
@@ -37,7 +37,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   source:
-    repoURL: oci://ghcr.io/bakedchicken/homelab-platform
+    repoURL: oci://ghcr.io/bakedchicken/platform
     targetRevision: latest
     path: data
   syncPolicy:
@@ -65,7 +65,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   source:
-    repoURL: oci://ghcr.io/bakedchicken/homelab-platform
+    repoURL: oci://ghcr.io/bakedchicken/platform
     targetRevision: latest
     path: identity
   syncPolicy:
@@ -93,7 +93,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   source:
-    repoURL: oci://ghcr.io/bakedchicken/homelab-platform
+    repoURL: oci://ghcr.io/bakedchicken/platform
     targetRevision: latest
     path: observability
   syncPolicy:
@@ -121,7 +121,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   source:
-    repoURL: oci://ghcr.io/bakedchicken/homelab-platform
+    repoURL: oci://ghcr.io/bakedchicken/platform
     targetRevision: latest
     path: apps
   syncPolicy:
