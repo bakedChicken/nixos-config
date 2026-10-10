@@ -27,7 +27,7 @@ in {
         };
         init = mkOption {
           type = types.str;
-          description = "Server that bootstraps etcd; every other node joins it at <init>.local";
+          description = "Server that initialises the cluster every other node joins it at <init>.local";
         };
         families = mkOption {
           type = types.listOf (types.enum ["ipv4" "ipv6"]);
@@ -299,7 +299,7 @@ in {
           enable = true;
           role = config.kubernetes.role;
           tokenFile = config.age.secrets.join-token.path;
-          clusterInit = isInit;
+          clusterInit = isInit && lib.length (lib.filter (node: node.role == "server") (lib.attrValues cluster.nodes)) > 1;
           serverAddr = lib.mkIf (!isInit) "https://${cluster.init}.local:6443";
           disable = lib.mkIf isServer [
             "traefik"

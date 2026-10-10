@@ -25,8 +25,6 @@ I'm generally trying to avoid using Nix as a /programming/ language, and only us
 | ~main~  | 3 Hyper-V VMs, all k3s servers                                    | Cilium  | kube-vip, TrueNAS CSI, OpenBao, Argo CD        | the whole platform, Reloader      |
 | ~edge~  | 1 QEMU VM on TrueNAS (k3s server), 2 Raspberry Pi 3B (k3s agents) | flannel | TrueNAS CSI, ~argocd-spoke~, mktxp credentials | Reloader, monitoring agent, mktxp |
 
-~main~'s Argo CD manages both clusters (hub and spoke); ~edge~ runs no Argo CD of its own. Both clusters get the Gateway API and snapshot CRDs, and neither runs k3s's bundled Traefik or servicelb.
-
 I use k3s, btw. The nodes are running DualStack IPv4 + IPv6 for now, but I'm trying to go IPv6-mostly.
 
 On top of the main cluster I install Cilium as a CNI and service mesh. Additionally, I have a TrueNAS machine in my local network, which I'm using as a CSI for both clusters. I have a 10Gbps connection between the nodes and the TrueNAS server, so it's interesting to compare the performance of NVMe-oF vs iSCSI vs NFS. Each cluster keeps its volumes in its own dataset (~tank/kubernetes~, ~tank/kubernetes-edge~), so deterministic PVC names never collide between clusters.
