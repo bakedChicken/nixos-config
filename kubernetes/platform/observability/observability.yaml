@@ -101,7 +101,7 @@ spec:
   sources:
     - repoURL: ghcr.io/grafana-community/helm-charts
       chart: loki
-      targetRevision: 18.13.3
+      targetRevision: 18.15.1
       helm:
         valuesObject:
           backend:
@@ -194,7 +194,7 @@ spec:
   sources:
     - repoURL: ghcr.io/grafana-community/helm-charts
       chart: tempo
-      targetRevision: 3.0.0
+      targetRevision: 3.1.0
       helm:
         valuesObject:
           podAnnotations:
@@ -247,7 +247,7 @@ spec:
   sources:
     - repoURL: ghcr.io/grafana-community/helm-charts
       chart: grafana
-      targetRevision: 13.2.5
+      targetRevision: 13.5.0
       helm:
         valuesObject:
           dashboardProviders:
@@ -411,7 +411,7 @@ spec:
   sources:
     - repoURL: https://grafana.github.io/helm-charts
       chart: k8s-monitoring
-      targetRevision: 4.5.2
+      targetRevision: 4.5.3
       helm:
         valuesObject:
           cluster:
@@ -603,7 +603,7 @@ spec:
   sources:
     - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
       chart: opentelemetry-operator
-      targetRevision: 0.123.0
+      targetRevision: 0.124.1
       helm:
         valuesObject:
           manager:
@@ -798,7 +798,7 @@ spec:
   sources:
     - repoURL: https://grafana.github.io/helm-charts
       chart: pyroscope
-      targetRevision: 2.3.1
+      targetRevision: 2.4.0
       helm:
         valuesObject:
           alloy:
@@ -945,7 +945,7 @@ spec:
   sources:
     - repoURL: https://victoriametrics.github.io/helm-charts
       chart: victoria-metrics-operator
-      targetRevision: 0.68.0
+      targetRevision: 0.68.1
       helm:
         valuesObject:
           admissionWebhooks:
@@ -1053,7 +1053,7 @@ spec:
   sources:
     - repoURL: https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
-      targetRevision: 91.8.2
+      targetRevision: 92.3.0
       helm:
         valuesObject:
           defaultRules:

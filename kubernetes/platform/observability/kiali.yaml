@@ -54,7 +54,7 @@ spec:
   sources:
     - repoURL: https://kiali.org/helm-charts
       chart: kiali-server
-      targetRevision: 2.32.0
+      targetRevision: 2.33.0
       helm:
         valuesObject:
           auth:

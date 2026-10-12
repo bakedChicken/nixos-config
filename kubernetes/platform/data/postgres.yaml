@@ -24,7 +24,7 @@ spec:
   sources:
     - repoURL: ghcr.io/cloudnative-pg/charts
       chart: cloudnative-pg
-      targetRevision: 0.29.0
+      targetRevision: 0.29.1
   syncPolicy:
     automated:
       prune: true
@@ -57,7 +57,7 @@ spec:
   sources:
     - repoURL: ghcr.io/cloudnative-pg/charts
       chart: plugin-barman-cloud
-      targetRevision: 0.8.0
+      targetRevision: 0.8.1
   syncPolicy:
     automated:
       prune: true

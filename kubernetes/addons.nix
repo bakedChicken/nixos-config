@@ -102,7 +102,7 @@
     }: {
       services.k3s.manifests = lib.mkIf (config.kubernetes.role == "server") {
         gateway-api.source = pkgs.fetchurl {
-          url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml";
+          url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/experimental-install.yaml";
           hash = "sha256-8NXCsL7yudgLprqQnl5dveCABjhDdgg1P0Gm69OvzZ8=";
         };
       };
@@ -166,8 +166,8 @@
         };
         autoDeployCharts.cilium = {
           repo = "oci://quay.io/cilium/charts/cilium";
-          version = "1.21.0-pre.2";
-          hash = "sha256-t09VSVgfyxKG9N+6Ip8zGwd9U+MRH0vIM9uPUI0UhR4=";
+          version = "1.21.0-pre.3";
+          hash = "sha256-MyFvvjGa8CPcnoqvksMfupRa3IVvv6TPCd6F8JAvQbE=";
           targetNamespace = "kube-system";
           extraFieldDefinitions = {
             spec.bootstrap = true;
@@ -254,8 +254,8 @@
         manifests.truenas-api-key.source = config.age.secrets.truenas-api-key.path;
         autoDeployCharts.tns-csi = {
           repo = "oci://registry-1.docker.io/bfenski/tns-csi-driver";
-          version = "0.17.6";
-          hash = "sha256-afc86SIav9UL205aYE8Su1DufJF3ot7i1iT0RXK8CTA=";
+          version = "0.19.2";
+          hash = "sha256-1ip1vpFUpmqBVKueAFbMeD/G5QJuntJqbZ9q/I04E9A=";
           targetNamespace = "kube-system";
           extraFieldDefinitions = {
             spec.bootstrap = true;

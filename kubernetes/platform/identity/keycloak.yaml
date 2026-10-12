@@ -71,7 +71,7 @@ spec:
   sources:
     # Upstream's own kustomization: CRDs + a cluster-wide operator.
     - repoURL: https://github.com/keycloak/keycloak-k8s-resources.git
-      targetRevision: 26.7.4
+      targetRevision: 26.8.0
       path: kubernetes/cluster-wide
   syncPolicy:
     automated:
