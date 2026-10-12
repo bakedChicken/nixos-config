@@ -7,6 +7,7 @@
 - [[#ui-configuration][UI configuration]]
   - [[#enable-lexical-binding][Enable Lexical Binding]]
   - [[#turn-off-autosave-files][Turn off autosave files]]
+  - [[#trust-all-projects-by-default][Trust all projects by default]]
   - [[#display-line-numbers-and-enable-some-mods-by-default][Display Line Numbers and Enable some mods by default]]
   - [[#indentation-and-text-properties][Indentation and Text properties]]
   - [[#load-theme][Load theme]]
@@ -39,6 +40,12 @@
 #+begin_src emacs-lisp
   (setq auto-save-default nil)
   (setq make-backup-files nil)
+#+end_src
+
+** Trust all projects by default
+
+#+begin_src emacs-lisp
+  (setq trusted-content :all)
 #+end_src
 
 ** Display Line Numbers and Enable some mods by default
