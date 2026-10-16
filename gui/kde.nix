@@ -37,6 +37,17 @@
         kdePackages.khelpcenter
         kdePackages.plasma-systemmonitor
         kdePackages.qrca
+        kdePackages.konsole
+        kdePackages.ark
+        kdePackages.dolphin
+        kdePackages.dolphin-plugins
+        kdePackages.baloo-widgets
+        kdePackages.ffmpegthumbs
+        kdePackages.spectacle
+        kdePackages.krdp
+        kdePackages.discover
+        kdePackages.plasma-keyboard
+        kdePackages.qtvirtualkeyboard
       ];
 
       environment.systemPackages = [

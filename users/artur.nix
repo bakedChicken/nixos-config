@@ -53,6 +53,7 @@
       programs.bash = {
         enable = true;
         historyControl = ["ignoredups"];
+        historyFile = "${config.xdg.stateHome}/bash/history";
       };
 
       programs.git = {

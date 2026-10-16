@@ -50,6 +50,12 @@
       url = "github:oddlama/agenix-rekey";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    impermanence = {
+      url = "github:nix-community/impermanence";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
   };
 
   outputs = inputs @ {
@@ -62,6 +68,7 @@
     disko,
     agenix,
     agenix-rekey,
+    impermanence,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} (
@@ -149,6 +156,13 @@
                               "noatime"
                             ];
                           };
+                          "/persist" = {
+                            mountpoint = "/persist";
+                            mountOptions = [
+                              "compress=zstd"
+                              "noatime"
+                            ];
+                          };
                           "/nix" = {
                             mountpoint = "/nix";
                             mountOptions = [
@@ -173,6 +187,82 @@
             qemu-vm = {modulesPath, ...}: {
               imports = ["${modulesPath}/profiles/qemu-guest.nix"];
               services.qemuGuest.enable = true;
+            };
+
+            ephemeral-root = {
+              pkgs,
+              utils,
+              ...
+            }: {
+              imports = [
+                impermanence.nixosModules.impermanence
+              ];
+
+              fileSystems."/persist".neededForBoot = true;
+              fileSystems."/home".neededForBoot = true;
+
+              environment.persistence."/persist" = {
+                hideMounts = true;
+                directories = [
+                  "/var/lib/nixos"
+                  "/var/lib/systemd"
+                  "/var/lib/NetworkManager"
+                  "/var/log"
+                ];
+                users.artur = {
+                  directories = [
+                    "Documents"
+                    "Downloads"
+                    {
+                      directory = ".ssh";
+                      mode = "0700";
+                    }
+                    ".config/mozilla"
+                    ".local/share/direnv"
+                    ".local/state/bash"
+                  ];
+                };
+              };
+
+              services.openssh.hostKeys = [
+                {
+                  path = "/persist/etc/ssh/ssh_host_ed25519_key";
+                  type = "ed25519";
+                }
+                {
+                  path = "/persist/etc/ssh/ssh_host_rsa_key";
+                  type = "rsa";
+                  bits = 4096;
+                }
+              ];
+              age.identityPaths = ["/persist/etc/ssh/ssh_host_ed25519_key"];
+
+              boot.initrd.systemd.tmpfiles.settings.ephemeral-root."/sysroot/etc".d = {
+                mode = "0755";
+                user = "root";
+                group = "root";
+              };
+
+              boot.initrd.systemd.initrdBin = [pkgs.btrfs-progs];
+              boot.initrd.systemd.services.wipe-ephemeral = {
+                description = "Recreate / and /home as empty subvolumes";
+                wantedBy = ["initrd.target"];
+                requires = ["${utils.escapeSystemdPath "/dev/disk/by-partlabel/disk-main-root"}.device"];
+                after = ["${utils.escapeSystemdPath "/dev/disk/by-partlabel/disk-main-root"}.device"];
+                before = ["sysroot.mount"];
+                unitConfig.DefaultDependencies = false;
+                serviceConfig.Type = "oneshot";
+                script = ''
+                  mkdir -p /btrfs
+                  mount -t btrfs -o subvolid=5 /dev/disk/by-partlabel/disk-main-root /btrfs
+                  # A boot interrupted between delete and create leaves a subvolume missing; carry on and create it
+                  btrfs subvolume delete --recursive /btrfs/root || true
+                  btrfs subvolume delete --recursive /btrfs/home || true
+                  btrfs subvolume create /btrfs/root
+                  btrfs subvolume create /btrfs/home
+                  umount /btrfs
+                '';
+              };
             };
 
             common-bloat-module = {pkgs, ...}: {
@@ -287,6 +377,7 @@
                 nixpkgs.lib.nixosSystem {
                   modules = [
                     self.diskoConfigurations.default
+                    self.nixosModules.ephemeral-root
                     self.nixosModules.common-nix-module
                     self.nixosModules.common-bloat-module
                     self.nixosModules.artur
@@ -307,6 +398,7 @@
                 nixpkgs.lib.nixosSystem {
                   modules = [
                     self.diskoConfigurations.default
+                    self.nixosModules.ephemeral-root
                     self.nixosModules.common-nix-module
                     self.nixosModules.common-bloat-module
                     self.nixosModules.hyperv-vm
@@ -316,7 +408,7 @@
                     {
                       networking.hostName = "nixos-development-environment";
                       nixpkgs.hostPlatform = system;
-                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDD0wl0FAPfCFuE13ul8D+5D1Zq4vrWQsRVF28aZgcgN";
+                      age.rekey.hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqP+nJMz3zHwDHZOfCNHDNgLhSqvjs5tgbxYVs6eu4X";
                     }
                   ];
                 }
