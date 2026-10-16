@@ -94,16 +94,18 @@ spec:
           env:
             - name: KEYCLOAK_URL
               value: http://keycloak-service.keycloak.svc.cluster.local:8080
-            - name: KEYCLOAK_USER
+            - name: KEYCLOAK_GRANTTYPE
+              value: client_credentials
+            - name: KEYCLOAK_CLIENTID
               valueFrom:
                 secretKeyRef:
-                  name: keycloak-initial-admin
-                  key: username
-            - name: KEYCLOAK_PASSWORD
+                  name: keycloak-bootstrap-admin
+                  key: client-id
+            - name: KEYCLOAK_CLIENTSECRET
               valueFrom:
                 secretKeyRef:
-                  name: keycloak-initial-admin
-                  key: password
+                  name: keycloak-bootstrap-admin
+                  key: client-secret
             - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
               value: "true"
             - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT

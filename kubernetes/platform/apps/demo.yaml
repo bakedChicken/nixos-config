@@ -1,0 +1,85 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: demo
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: demo
+  login: true
+  ensure: present
+  passwordSecret:
+    name: demo-pg-creds
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: demo
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: demo
+  owner: demo
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: demo-pg-creds
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: demo-pg-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: demo
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: demo/postgres
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "95"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app-demo
+  source:
+    repoURL: oci://ghcr.io/bakedchicken/demo-deploy
+    targetRevision: latest
+    path: .
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

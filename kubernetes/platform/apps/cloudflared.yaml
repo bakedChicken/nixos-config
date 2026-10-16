@@ -44,6 +44,8 @@ data:
         service: http_status:404
       - hostname: auth.burned.host
         service: http://keycloak-service.keycloak.svc.cluster.local:8080
+      - hostname: demo.burned.host
+        service: http://demo.app-demo.svc.cluster.local:8080
       - hostname: nextcloud.burned.host
         service: http://nextcloud.nextcloud.svc.cluster.local:8080
       - service: http_status:404

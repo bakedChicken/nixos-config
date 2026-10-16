@@ -226,7 +226,6 @@
     truenas-csi = {
       config,
       lib,
-      pkgs,
       ...
     }: let
       cluster = config.kubernetes.cluster;
@@ -324,6 +323,10 @@
           createNamespace = true;
           values = {
             injector.enabled = false;
+            serverTelemetry.grafanaDashboard = {
+              enabled = true;
+              extraAnnotations.grafana_folder = "OpenBao";
+            };
             server = {
               annotations = {
                 "prometheus.io/scrape" = "true";
@@ -441,28 +444,58 @@
     argocd = {
       config,
       lib,
+      pkgs,
       ...
     }: let
       cluster = config.kubernetes.cluster;
       isServer = config.kubernetes.role == "server";
     in {
       age.secrets = lib.mkIf isServer {
-        argocd-ghcr-creds.rekeyFile = ./secrets/argocd-ghcr-credentials.age;
         cloudflare-api-token.rekeyFile = ./secrets/cloudflare-api-token.age;
         keycloak-admin-password.rekeyFile = ./secrets/keycloak-admin-password.age;
         argocd-cluster-edge.rekeyFile = ./secrets/argocd-cluster-edge.age;
       };
 
       systemd.services.k3s.restartTriggers = lib.mkIf isServer [
-        config.age.secrets.argocd-ghcr-creds.file
         config.age.secrets.cloudflare-api-token.file
         config.age.secrets.keycloak-admin-password.file
         config.age.secrets.argocd-cluster-edge.file
       ];
 
+      systemd.services.argocd-ghcr-creds = lib.mkIf isServer {
+        description = "Render the Argo CD ghcr.io repository credentials";
+        wantedBy = ["k3s.service"];
+        before = ["k3s.service"];
+        restartTriggers = [config.age.secrets.ghcr-token.file];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          RuntimeDirectory = "argocd-ghcr-creds";
+          RuntimeDirectoryMode = "0700";
+          ExecStart = [
+            "${pkgs.coreutils}/bin/install -m 0600 ${(pkgs.formats.yaml {}).generate "argocd-ghcr-creds.yaml" {
+              apiVersion = "v1";
+              kind = "Secret";
+              metadata = {
+                name = "ghcr-bakedchicken";
+                namespace = "argocd";
+                labels."argocd.argoproj.io/secret-type" = "repo-creds";
+              };
+              stringData = {
+                type = "oci";
+                url = "oci://ghcr.io/bakedchicken";
+                username = "bakedchicken";
+                password = "@token@";
+              };
+            }} /run/argocd-ghcr-creds/argocd-ghcr-creds.yaml"
+            "${pkgs.replace-secret}/bin/replace-secret @token@ ${config.age.secrets.ghcr-token.path} /run/argocd-ghcr-creds/argocd-ghcr-creds.yaml"
+          ];
+        };
+      };
+
       services.k3s = lib.mkIf isServer {
         manifests = {
-          argocd-ghcr-creds.source = config.age.secrets.argocd-ghcr-creds.path;
+          argocd-ghcr-creds.source = "/run/argocd-ghcr-creds/argocd-ghcr-creds.yaml";
           cloudflare-api-token.source = config.age.secrets.cloudflare-api-token.path;
           keycloak-admin-password.source = config.age.secrets.keycloak-admin-password.path;
           argocd-cluster-edge.source = config.age.secrets.argocd-cluster-edge.path;

@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Applications in app-* namespaces, synced from their deploy/ artifacts
+  sourceRepos:
+    - oci://ghcr.io/bakedchicken/*-deploy
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: app-*
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace

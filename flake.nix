@@ -184,7 +184,6 @@
                 nerd-fonts.fira-code
               ];
 
-              # Read by the push-platform flake app, which runs as artur.
               age.secrets.ghcr-token = {
                 rekeyFile = ./kubernetes/secrets/ghcr-token.age;
                 owner = "artur";

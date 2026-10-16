@@ -107,6 +107,13 @@ spec:
           backend:
             replicas: 0
           deploymentMode: Monolithic
+          monitoring:
+            dashboards:
+              enabled: true
+              annotations:
+                grafana_folder: Loki
+            rules:
+              enabled: true
           global:
             extraArgs:
               - "-config.expand-env=true"
@@ -115,6 +122,12 @@ spec:
                   name: loki-rustfs-creds
           loki:
             auth_enabled: false
+            # Logs older than 7 days are deleted by the compactor (about 2.5 GB a day reach RustFS)
+            limits_config:
+              retention_period: 168h
+            compactor:
+              retention_enabled: true
+              delete_request_store: s3
             commonConfig:
               replication_factor: 3
             # Drop ingesters that stopped heartbeating (e.g. a pod that came back with a new IP) instead of keeping
@@ -146,6 +159,7 @@ spec:
             replicas: 0
           singleBinary:
             podAnnotations:
+              k8s.grafana.com/job: observability/loki
               k8s.grafana.com/metrics.container: loki
               prometheus.io/port: "3100"
               prometheus.io/scrape: "true"
@@ -264,45 +278,30 @@ spec:
                   type: file
           dashboards:
             default:
-              kubernetes-kube-state-metrics:
-                gnetId: 21742
-                revision: 1
-                datasource:
-                  - name: DS_PROMETHEUS
-                    value: prometheus
-                  - name: VAR_DATASOURCE
-                    value: prometheus
               mikrotik-mktxp:
                 gnetId: 13679
                 revision: 32
                 datasource:
                   - name: DS_PROMETHEUS
                     value: prometheus
-              loki-stack-monitoring:
-                gnetId: 14055
-                revision: 5
-                datasource:
-                  - name: DS_PROMETHEUS
-                    value: prometheus
-                  - name: DS_LOKI
-                    value: loki
-              node-exporter-full:
-                gnetId: 1860
-                revision: 45
-              openbao-vault:
-                gnetId: 12904
-                revision: 2
-                datasource:
-                  - name: DS_PROMXY
-                    value: prometheus
-              postgres-cloudnativepg:
-                gnetId: 20417
-                revision: 4
-                datasource:
-                  - name: DS_PROMETHEUS
-                    value: prometheus
-                  - name: DS_EXPRESSION
-                    value: __expr__
+          # Loads every ConfigMap labelled grafana_dashboard: "1" in any namespace (charts and app deploy/
+          # directories); the grafana_folder annotation picks the folder
+          sidecar:
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 128Mi
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              searchNamespace: ALL
+              resource: configmap
+              folderAnnotation: grafana_folder
+              provider:
+                foldersFromFilesStructure: true
           datasources:
             datasources.yaml:
               apiVersion: 1
@@ -1072,10 +1071,22 @@ spec:
             enabled: false
           grafana:
             enabled: false
+            # Dashboard ConfigMaps for the Grafana sidecar
+            forceDeployDashboards: true
+            sidecar:
+              dashboards:
+                annotations:
+                  grafana_folder: Kubernetes
           kubeStateMetrics:
             enabled: false
           nodeExporter:
             enabled: false
+            forceDeployDashboards: true
+            operatingSystems:
+              aix:
+                enabled: false
+              darwin:
+                enabled: false
           prometheusOperator:
             enabled: false
           prometheus:

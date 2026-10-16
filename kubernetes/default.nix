@@ -295,6 +295,30 @@ in {
           generator.script = "alnum";
         };
 
+        age.secrets.ghcr-token.rekeyFile = ./secrets/ghcr-token.age;
+        systemd.services.ghcr-registries = {
+          description = "Render k3s registries.yaml with the ghcr.io token";
+          wantedBy = ["k3s.service"];
+          before = ["k3s.service"];
+          restartTriggers = [config.age.secrets.ghcr-token.file];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            RuntimeDirectory = "ghcr-registries";
+            RuntimeDirectoryMode = "0700";
+            ExecStart = [
+              "${pkgs.coreutils}/bin/install -m 0600 ${(pkgs.formats.yaml {}).generate "registries.yaml" {
+                configs."ghcr.io".auth = {
+                  username = "bakedchicken";
+                  password = "@token@";
+                };
+              }} /run/ghcr-registries/registries.yaml"
+              "${pkgs.replace-secret}/bin/replace-secret @token@ ${config.age.secrets.ghcr-token.path} /run/ghcr-registries/registries.yaml"
+            ];
+          };
+        };
+        systemd.services.k3s.restartTriggers = [config.age.secrets.ghcr-token.file];
+
         services.k3s = {
           enable = true;
           role = config.kubernetes.role;
@@ -305,12 +329,15 @@ in {
             "traefik"
             "servicelb"
           ];
-          extraFlags = lib.mkIf isServer [
-            "--write-kubeconfig-mode 0644"
-            "--tls-san ${config.networking.hostName}.local"
-            "--tls-san ${cluster.domain}"
-            "--cluster-cidr=${lib.concatMapStringsSep "," (family: cluster.clusterCidr.${family}) cluster.families}"
-            "--service-cidr=${lib.concatMapStringsSep "," (family: cluster.serviceCidr.${family}) cluster.families}"
+          extraFlags = lib.mkMerge [
+            ["--private-registry /run/ghcr-registries/registries.yaml"]
+            (lib.mkIf isServer [
+              "--write-kubeconfig-mode 0644"
+              "--tls-san ${config.networking.hostName}.local"
+              "--tls-san ${cluster.domain}"
+              "--cluster-cidr=${lib.concatMapStringsSep "," (family: cluster.clusterCidr.${family}) cluster.families}"
+              "--service-cidr=${lib.concatMapStringsSep "," (family: cluster.serviceCidr.${family}) cluster.families}"
+            ])
           ];
         };
       };

@@ -25,6 +25,13 @@ spec:
     - repoURL: ghcr.io/cloudnative-pg/charts
       chart: cloudnative-pg
       targetRevision: 0.29.1
+      helm:
+        valuesObject:
+          monitoring:
+            grafanaDashboard:
+              create: true
+              annotations:
+                grafana_folder: Postgres
   syncPolicy:
     automated:
       prune: true
@@ -130,7 +137,7 @@ metadata:
 spec:
   retentionPolicy: 30d
   configuration:
-    destinationPath: s3://backups/default-postgres-cluster.postgres/
+    destinationPath: s3://backups/default-postgres-cluster.postgres
     endpointURL: http://rustfs-svc.rustfs-system.svc.cluster.local:9000
     s3Credentials:
       accessKeyId:

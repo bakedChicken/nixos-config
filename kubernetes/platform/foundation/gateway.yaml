@@ -45,6 +45,33 @@ spec:
               name: cloudflare-api-token-secret
               key: api-token
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: burned-gateway-options
+  namespace: gateway-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+data:
+  deployment: |
+    spec:
+      replicas: 2
+      template:
+        spec:
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels:
+                  gateway.networking.k8s.io/gateway-name: burned-gateway
+  podDisruptionBudget: |
+    spec:
+      minAvailable: 1
+      selector:
+        matchLabels:
+          gateway.networking.k8s.io/gateway-name: burned-gateway
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -55,7 +82,12 @@ metadata:
     cert-manager.io/private-key-rotation-policy: "Never"
     argocd.argoproj.io/sync-wave: "31"
 spec:
-  gatewayClassName: cilium
+  gatewayClassName: istio
+  infrastructure:
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: burned-gateway-options
   allowedListeners:
     namespaces:
       from: All

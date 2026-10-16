@@ -96,9 +96,14 @@ spec:
   sources:
     - repoURL: https://charts.rustfs.com
       chart: rustfs
-      targetRevision: 1.0.0
+      targetRevision: 1.0.1
       helm:
         valuesObject:
+          podSecurityContext:
+            fsGroup: 10001
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroupChangePolicy: OnRootMismatch
           extraEnv:
             - name: RUSTFS_BROWSER_REDIRECT_URL
               value: https://rustfs.internal.k8s.burned.host
@@ -156,7 +161,7 @@ spec:
           secret:
             existingSecret: rustfs-root-creds
           storageclass:
-            dataStorageSize: 30Gi
+            dataStorageSize: 60Gi
             logStorageSize: 1Gi
             name: tns-csi-iscsi
           config:

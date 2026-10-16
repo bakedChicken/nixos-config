@@ -59,6 +59,12 @@ spec:
       helm:
         valuesObject:
           profile: ambient
+          meshConfig:
+            extensionProviders:
+              - name: otel
+                opentelemetry:
+                  service: k8s-monitoring-alloy-receiver.observability.svc.cluster.local
+                  port: 4317
           autoscaleMin: 2
           replicaCount: 2
           resources:
@@ -99,6 +105,20 @@ spec:
         duration: 10s
         factor: 2
         maxDuration: 5m
+---
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: mesh-default
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  tracing:
+    - providers:
+        - name: otel
+      randomSamplingPercentage: 100
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
