@@ -1,146 +1,76 @@
-#+TITLE: NixOS-powered Kubernetes infrastructure
+#+TITLE: Kubernetes clusters
 #+AUTHOR: Artur Luppov
-#+DESCRIPTION: NixOS-powered infrastructure configuration
+#+DESCRIPTION: The k3s clusters, their add-ons and the platform Argo CD syncs
 
 * Table of Contents :TOC:
-- [[#prelude][Prelude]]
-- [[#kubernetes-clusters][Kubernetes clusters]]
-  - [[#defining-clusters][Defining clusters]]
-  - [[#network][Network]]
-  - [[#naming-convention][Naming convention]]
-  - [[#installation-and-first-boot][Installation and first-boot]]
-  - [[#mdns][mDNS]]
-  - [[#workload][Workload]]
+- [[#clusters][Clusters]]
+- [[#defining-a-cluster][Defining a cluster]]
+- [[#network-and-names][Network and names]]
+- [[#workload][Workload]]
+- [[#reinstalling][Reinstalling]]
 
-* Prelude
+* Clusters
 
-This repository contains the configuration files for my whole infrastructure. It deploys two Kubernetes (k3s) clusters with their dependencies, as well as it's used to configure my personal development machine.
+| Cluster | Nodes                                                                                     | CNI     | NixOS add-ons                     | From ~main~'s Argo CD             |
+|---------+-------------------------------------------------------------------------------------------+---------+-----------------------------------+-----------------------------------|
+| ~main~  | ~k8s-node-1~ … ~k8s-node-3~, all servers                                                  | Cilium  | kube-vip, OpenBao, Argo CD        | the whole platform, Reloader      |
+| ~edge~  | ~k8s-node-x86-64-1~ (server, SQLite), ~k8s-node-aarch64-1~, ~k8s-node-aarch64-2~ (agents) | flannel | ~argocd-spoke~, mktxp credentials | Reloader, monitoring agent, mktxp |
 
-I'm generally trying to avoid using Nix as a /programming/ language, and only use it as a declarative configuration language. No loops, no conditions, no custom functions. This is mainly because I want to avoid being autistically overwhelmed.
+Every node also gets the Gateway API and volume snapshot CRDs and democratic-csi (~zfs-generic-iscsi~ against storage-station, storage class ~iscsi~, snapshot class ~iscsi-snapshot~). Each cluster keeps its volumes in its own dataset (~tank/kubernetes~, ~tank/kubernetes-edge~). Both run dual-stack.
 
-* Kubernetes clusters
+* Defining a cluster
 
-| Cluster | Nodes                                                             | CNI     | NixOS add-ons                                  | Argo CD (from ~main~)             |
-|---------+-------------------------------------------------------------------+---------+------------------------------------------------+-----------------------------------|
-| ~main~  | 3 Hyper-V VMs, all k3s servers                                    | Cilium  | kube-vip, TrueNAS CSI, OpenBao, Argo CD        | the whole platform, Reloader      |
-| ~edge~  | 1 QEMU VM on TrueNAS (k3s server), 2 Raspberry Pi 3B (k3s agents) | flannel | TrueNAS CSI, ~argocd-spoke~, mktxp credentials | Reloader, monitoring agent, mktxp |
-
-I use k3s, btw. The nodes are running DualStack IPv4 + IPv6 for now, but I'm trying to go IPv6-mostly.
-
-On top of the main cluster I install Cilium as a CNI and service mesh. Additionally, I have a TrueNAS machine in my local network, which I'm using as a CSI for both clusters. I have a 10Gbps connection between the nodes and the TrueNAS server, so it's interesting to compare the performance of NVMe-oF vs iSCSI vs NFS. Each cluster keeps its volumes in its own dataset (~tank/kubernetes~, ~tank/kubernetes-edge~), so deterministic PVC names never collide between clusters.
-
-Configuration of the main cluster's VMs:
-+ CPU: 8 cores
-+ RAM: 16384 MB
-+ Disk Space: 32 GB
-
-** Defining clusters
-
-| File                      | What                                                                                       |
-|---------------------------+--------------------------------------------------------------------------------------------|
-| ~kubernetes/addons.nix~   | Node hardware modules and cluster add-ons (Gateway API CRDs, snapshot CRDs, CNIs, CSI, …), each a module a cluster lists                         |
-| ~kubernetes/default.nix~  | Every cluster (domains, join token, storage dataset, add-ons) and its nodes (role, hardware); the ~kubernetes.clusters~ options, the base every node gets, and the generated outputs |
-
-Every node becomes ~nixosConfigurations.<node>~ and ~deploy.nodes.<node>~ (deployed to ~<node>.local~). Add-ons read their per-cluster values from ~config.kubernetes.cluster~. Nodes join their cluster at ~<init>.local~.
+Clusters and their nodes are declared in ~kubernetes.clusters~ in ~flake.nix~; ~default.nix~ defines those options, the ~kubernetes-node~ module and the generated ~nixosConfigurations.<node>~ and ~deploy.nodes.<node>~; ~addons.nix~ holds the add-ons a cluster lists in ~modules~. Add-ons read per-cluster values from ~config.kubernetes.cluster~. Every node joins the cluster's ~init~ server at ~<init>.local~.
 
 A cluster managed by ~main~'s Argo CD (a spoke) needs:
-+ its own CA, generated once and agenix-encrypted (~ca~ in its cluster definition, e.g. ~secrets/edge-ca-{crt,key}.age~); k3s only takes it before its first start, so adding it later means resetting the cluster's k3s state Resetting it means: stop k3s with ~k3s-killall.sh~ on all its nodes, delete ~/var/lib/rancher/k3s~ and ~/etc/rancher/k3s~ on the server (only ~agent/~ on agents), deploy, then ~systemctl restart systemd-tmpfiles-resetup~ (a deploy alone doesn't recreate ~manifests/nixos/~ if its rules didn't change) and start k3s.
-+ the ~argocd-spoke~ add-on, which puts that CA in place as both k3s server and client CA, and gives the ~argocd~ client certificate it signs cluster-admin
-+ a DNS name for its API server (~edge.burned.host~ → its server's address), which Argo CD's pods can resolve
++ its own CA, generated once and agenix-encrypted (~ca~ in its definition); k3s only takes it before its first start
++ the ~argocd-spoke~ add-on, which installs that CA as k3s's server and client CA and gives the ~argocd~ client certificate cluster-admin
++ a DNS name for its API server that Argo CD's pods resolve (~edge.burned.host~)
 + on ~main~, its Argo CD cluster Secret (~secrets/argocd-cluster-<name>.age~, shipped by the ~argocd~ add-on) and a destination in the ~platform~ project (~infra/argocd-bootstrap.yaml~)
 
-** Network
+* Network and names
 
-The nodes live on VLAN 33, which carries only the clusters. Addresses come from DHCP reservations on the router and from SLAAC, never from the NixOS configuration. IPv6 is ULA-only (~fd71:895d:e328:33::/64~); the router masquerades it to the dynamic GUA (NAT66), and NAT64 (~64:ff9b::/96~, advertised as PREF64) serves IPv4-only destinations. TrueNAS bridges the edge VM and the Raspberry Pis (plugged into its spare ports) onto VLAN 33, and serves storage there at ~172.16.33.53~.
+The nodes live on VLAN 33, which carries only the clusters; addresses are DHCP reservations and EUI-64 SLAAC. IPv6 is ULA-only (~fd71:895d:e328:33::/64~), masqueraded to the GUA by the router; NAT64 (~64:ff9b::/96~) serves IPv4-only destinations.
 
-| Node               | IPv4 address | IPv6 address                         | Role                    |
-|--------------------+--------------+--------------------------------------+-------------------------|
-| k8s-node-1         | 172.16.33.11 | fd71:895d:e328:33:215:5dff:fe34:a44c | k3s server + k3s worker |
-| k8s-node-2         | 172.16.33.12 | fd71:895d:e328:33:215:5dff:fe34:a44d | k3s server + k3s worker |
-| k8s-node-3         | 172.16.33.13 | fd71:895d:e328:33:215:5dff:fe34:a44f | k3s server + k3s worker |
-| k8s-node-x86-64-1  | 172.16.33.21 | fd71:895d:e328:33:2a0:98ff:fe5c:92f6 | k3s server + k3s worker |
-| k8s-node-aarch64-1 | TBD          | TBD                                  | k3s worker              |
-| k8s-node-aarch64-2 | TBD          | TBD                                  | k3s worker              |
+| Node               |         IPv4 | IPv6                                 |
+|--------------------+--------------+--------------------------------------|
+| k8s-node-1         | 172.16.33.11 | fd71:895d:e328:33:215:5dff:fe34:a44c |
+| k8s-node-2         | 172.16.33.12 | fd71:895d:e328:33:215:5dff:fe34:a44d |
+| k8s-node-3         | 172.16.33.13 | fd71:895d:e328:33:215:5dff:fe34:a44f |
+| k8s-node-x86-64-1  | 172.16.33.21 | fd71:895d:e328:33:2a0:98ff:fe5c:92f6 |
+| k8s-node-aarch64-1 | 172.16.33.22 | EUI-64 of its MAC                    |
+| k8s-node-aarch64-2 | 172.16.33.23 | EUI-64 of its MAC                    |
 
-The main cluster's control-plane VIP and LoadBalancer IP is ~172.16.33.200~.
+~main~'s control-plane VIP and LoadBalancer address is ~172.16.33.200~. Apps are ~<app>.burned.host~ when public and ~<app>.internal.k8s.burned.host~ when only for the home network and VPN.
 
-** Naming convention
+* Workload
 
-One second-level domain, ~burned.host~, covers every app: ~<app>.burned.host~ for anything meant to be reachable from the public internet, ~<app>.internal.k8s.burned.host~ for anything in the Kubernetes cluster that should only resolve on the home network/VPN.
+| Layer          | Tool                                  | Where                                 | Command                   |
+|----------------+---------------------------------------+---------------------------------------+---------------------------|
+| Infrastructure | NixOS (deploy-rs, nixos-anywhere)     | ~default.nix~, ~addons.nix~, ~infra/~ | ~deploy .#k8s-node-1~     |
+| Platform       | Argo CD on ~main~, project ~platform~ | ~platform/~                           | ~nix run .#push-platform~ |
 
-** Installation and first-boot
+NixOS holds what has to exist before Argo CD runs: k3s, the CNI, kube-vip, democratic-csi, OpenBao, Argo CD and the secrets they need. ~push-platform~ pushes ~platform/~ from the working tree to ghcr.io as ~platform:latest~, annotated with the commit and whether the tree was dirty; Argo CD picks it up within minutes. The cluster runs whatever was pushed last, so push before reinstalling.
 
-My TrueNAS machine runs a Docker instance of netboot.xyz, which I use for iPXE network booting. After VMs are created and started, it's enough to boot the latest NixOS installer image and change the password for the live user.
-After that, I use nixos-anywhere to deploy the configuration for each respective node, using the following command:
+The root Application (~infra/argocd-bootstrap.yaml~) syncs the top-level files: ~platform/addons.yaml~ (one ApplicationSet per add-on that runs on several clusters) and ~platform/groups.yaml~ (one Application per group of ~main~'s platform). Groups sync side by side and retry until what they need from another group exists; sync waves order the inside of a group.
 
-#+begin_example bash
-nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-1 --target-host artur@k8s-node-1.local
-#+end_example
+| Group            | What (sync waves)                                                                                                                                                                                                     |
+|------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ~foundation/~    | cert-manager (0); Istio ambient (1-3); vault-config-operator, External Secrets (10); OpenBao contents, ~ClusterSecretStore~ (20); certificates, issuers, ~burned-gateway~ (29-32); Keycloak login for OpenBao (59-60) |
+| ~data/~          | CloudNativePG operator (0); Barman Cloud plugin (10); RustFS and its ~rustfs-users~ Job (33-35); ~default-postgres-cluster~ and its backups to RustFS (39-40)                                                         |
+| ~identity/~      | Keycloak operator (0); database, Keycloak at ~auth.burned.host~, ~burned~ realm (50-52); clients added by the ~keycloak-config~ Job (53-54)                                                                           |
+| ~observability/~ | alerting rules, Loki, Tempo, Pyroscope, Grafana, Alloy, OpenTelemetry Operator, VictoriaMetrics (69-72); ~Instrumentation~ (80); Kiali (95-96)                                                                        |
+| ~apps/~          | Nextcloud at ~nextcloud.burned.host~ (94); Cloudflare tunnel (95)                                                                                                                                                     |
 
-Sometimes nix ends up in an installer image, and installer image doesn't have this user or mDNS service, so if the host is not reachable try:
+An app gets its namespace, a database in the shared cluster (a ~Database~ and ~DatabaseRole~ in ~postgres~, as in ~platform/identity/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/foundation/openbao.yaml~, a line in the ~rustfs-users~ Job and its secret in ~platform/data/rustfs.yaml~, an ~ExternalSecret~ in its namespace).
 
-#+begin_example bash
-nix run github:nix-community/nixos-anywhere -- --copy-host-keys --flake .#k8s-node-1 --target-host root@172.16.33.11
-#+end_example
+* Reinstalling
 
-If you have a running Linux distro, ~--copy-host-keys~ will make sure that your ~/etc/ssh/ssh_host_ed25519~ private and public keys are persisted. Not the ~~/.ssh~ though. This is important, because agenix relies on those files to encrypt and decrypt secrets.
-
-After the deployment is done, VMs should reboot and launch a ready-to-use NixOS instance. Consequent chages could be deployed using the following command
-
-#+begin_example bash
-sudo nixos-rebuild switch --flake .#k8s-node-1 --target-host artur@k8s-node-1.local --elevate=sudo --ask-elevate-password
-#+end_example
-
-Or simply:
-
-#+begin_example bash
-deploy .#k8s-node-1
-#+end_example
-
-** mDNS
-
-I'm using avahi-daemon to advertize mDNS records in my local network. Each node has exactly one address per family, and it never changes: the IPv4 one is a DHCP reservation, the IPv6 one is EUI-64 (derived from the MAC). NetworkManager uses no temporary (privacy) addresses, and identifies itself to DHCP by MAC, so a reinstall keeps the same addresses.
-
-** Workload
-
-The cluster is managed in two layers, the platform only consuming what the infrastructure provides:
-
-| Layer          | Tool                              | Where                                  | Command                   |
-|----------------+-----------------------------------+----------------------------------------+---------------------------|
-| Infrastructure | NixOS (deploy-rs, nixos-anywhere) | ~default.nix~, ~addons.nix~, ~infra/~ | ~deploy .#k8s-node-1~     |
-| Platform       | Argo CD on ~main~, project ~platform~ | ~platform/~                        | ~nix run .#push-platform~ |
-
-~push-platform~ pushes ~platform/~ from the working tree to ghcr.io as a private OCI artifact (~platform:latest~), annotated with the git commit and whether the tree was dirty. Argo CD picks it up within a few minutes; nothing has to be committed. The cluster runs whatever was pushed last, so push before reinstalling. The push token is the ~ghcr-token~ agenix secret of the dev machines; Argo CD reads with ~argocd-ghcr-creds~.
-
-Infrastructure (NixOS) - everything tied to the machines, or needed before Argo CD can run:
-
-+ [X] k3s, disks, firewall, agenix (join token, Cloudflare token, TrueNAS API key, OpenBao seal key, Argo CD registry credentials, password hash of the Keycloak admin, edge's Argo CD cluster Secret; on edge its CA and the RouterOS API user of mktxp)
-+ [X] Cilium (CNI + service mesh + Gateway API implementation + Hubble), Gateway API CRDs, LoadBalancer IP pool
-+ [X] kube-vip (control-plane VIP)
-+ [X] TrueNAS SCALE CSI driver (~tns-csi~): ~tns-csi-iscsi~ (default, ReadWriteOnce) and ~tns-csi-nfs~ (ReadWriteMany), open-iscsi on the nodes, CSI snapshot CRDs and ~snapshot-controller~
-+ [X] OpenBao server
-+ [X] Argo CD itself
-
-Platform (Argo CD, ~platform/~) - holding its Helm chart Applications and its own resources. The root Application (~infra/argocd-bootstrap.yaml~) syncs only the top-level files:
-+ ~platform/addons.yaml~: add-ons for several clusters, one ApplicationSet each, listing the clusters it runs on (~reloader~ on both; ~monitoring-agent~, shipping metrics, logs and events to ~main~'s ~vminsert~ and ~loki~ routes, and ~mktxp~ from ~platform/mktxp/~ on ~edge~)
-+ ~platform/groups.yaml~: ~main~'s own platform, in groups.
-
-~groups.yaml~ holds one Application per group, each syncing its own directory. Groups sync side by side and retry until what they need from another group exists, so one stuck group never holds back the others; inside a group, sync waves (~-1~ for namespaces) keep the order:
-
-| Group            | What (sync waves)                                                                                                                                                                                                                   |
-|------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ~foundation/~    | cert-manager (0); Istio ambient (1-3); vault-config-operator, External Secrets (10); OpenBao contents, ~ClusterSecretStore~ (20); TLS certificates, issuers, ~burned-gateway~ (29-32); Keycloak login for OpenBao (59-60) |
-| ~data/~          | CloudNativePG operator (0); Barman Cloud plugin (10); RustFS with its ~rustfs-users~ Job (33-35); ~default-postgres-cluster~ and its backups to RustFS (39-40)                                                                      |
-| ~identity/~      | Keycloak operator (0); database, Keycloak at ~auth.burned.host~, ~burned~ realm (50-52); clients added later by the ~keycloak-config~ Job (53-54), as the operator never updates an existing realm                                  |
-| ~observability/~ | Alerting rules, Loki, Tempo, Pyroscope, Grafana, Alloy, OpenTelemetry Operator, VictoriaMetrics (69-72); ~Instrumentation~ (80); Kiali (95-96)                                                                                         |
-| ~apps/~          | Nextcloud at ~nextcloud.burned.host~ (94); Cloudflare tunnel (95)                                                                                                                                                                   |
-
-Apps get their namespace, a database in the shared cluster (a ~Database~ + ~DatabaseRole~ in ~postgres~, as in ~platform/identity/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/foundation/openbao.yaml~, a line in the ~rustfs-users~ Job and the ~rustfs-users~ secret in ~platform/data/rustfs.yaml~, an ~ExternalSecret~ in their namespace) and their secrets granted by the platform. The apps layer itself (its own Argo CD project, confined to ~app-*~ namespaces) comes with the first app.
-
-Notes on non-obvious defaults/constraints:
-
-+ Cluster uses deterministic PVC names, to avoid orphaned claims during full wipe. All ~reclaimPolicy~ or ~deleteStrategy~ annotations serve the same purpose: prevent orphans and make sure the data is not wiped during cluster reinstall. A node wipe never touches TrueNAS: every retained dataset is re-adopted by name on reinstall. To really start an app from scratch, delete its datasets on TrueNAS while the cluster is down.
-+ Postgres is the exception to re-adoption: CloudNativePG's ~initdb~ wipes an existing data directory, so ~default-postgres-cluster~ bootstraps with ~recovery~ instead, restoring the newest base backup in RustFS (~default-postgres-cluster-daily-objectstore~) plus the archived WAL. Writes not yet archived (at most ~archive_timeout~, 5 minutes) are lost, so before a planned reinstall take an on-demand backup: ~kubectl cnpg backup default-postgres-cluster -n postgres --method plugin --plugin-name barman-cloud.cloudnative-pg.io~. A brand-new environment with an empty bucket needs ~initdb~ once.
-+ Secrets: agenix only holds what must exist before the cluster is up.
-+ RustFS buckets, users and per-bucket policies are created by the ~rustfs-users~ Job. Passwords live in OpenBao, so they survive a wipe.
-  
++ Volumes have deterministic names and ~Retain~ policies, so a reinstalled cluster re-adopts every dataset. To start an app from scratch, delete its datasets on storage-station while the cluster is down.
++ Postgres is the exception: CloudNativePG's ~initdb~ wipes an existing data directory, so ~default-postgres-cluster~ bootstraps with ~recovery~ from the newest base backup in RustFS plus the archived WAL. Take a backup before a planned reinstall:
+#+begin_src bash
+kubectl cnpg backup default-postgres-cluster -n postgres --method plugin --plugin-name barman-cloud.cloudnative-pg.io
+#+end_src
+  A new environment with an empty bucket needs ~initdb~ once.
++ One server at a time: drain it, ~kubectl delete node <node>~, install it with its host keys and machine ID (see the main README); it joins as a new etcd member. Reinstalling the ~init~ server needs another server as ~init~ first, or it starts a new cluster.
++ Adding a CA to an existing cluster means resetting its k3s state: stop k3s on all nodes (~k3s-killall.sh~), delete ~/var/lib/rancher~ (only ~agent/~ on agents), deploy, start k3s.

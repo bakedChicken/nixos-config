@@ -1,4 +1,10 @@
-{inputs, ...}: {
+{
+  inputs,
+  config,
+  ...
+}: let
+  clusters = config.kubernetes.clusters;
+in {
   # Push kubernetes/platform from the working tree to ghcr.io, where Argo CD syncs it from.
   perSystem = {pkgs, ...}: {
     apps.push-platform = {
@@ -33,102 +39,76 @@
   };
 
   flake.nixosModules = {
-    vm-disk = {lib, ...}: {
-      imports = [
-        inputs.disko.nixosModules.default
-      ];
-
-      disko.devices.disk.main = {
-        device = lib.mkDefault "/dev/sda";
-        type = "disk";
-        content = {
-          type = "gpt";
-          partitions = {
-            ESP = {
-              priority = 1;
-              name = "ESP";
-              start = "1M";
-              end = "512M";
-              type = "EF00";
-              content = {
-                type = "filesystem";
-                format = "vfat";
-                mountpoint = "/boot";
-                mountOptions = ["umask=0077"];
-              };
-            };
-            root = {
-              size = "100%";
-              content = {
-                type = "btrfs";
-                extraArgs = ["-f"];
-                mountpoint = "/";
-                mountOptions = [
-                  "compress=zstd"
-                  "noatime"
-                ];
-              };
-            };
-          };
-        };
-      };
-    };
-
-    raspberry-pi-3 = {modulesPath, ...}: {
-      imports = [
-        "${modulesPath}/profiles/minimal.nix"
-        inputs.nixos-raspberry-pi-uefi.nixosModules.default
-      ];
-
-      hardware.pi3.uefi.enable = true;
-      fileSystems."/".fsType = "btrfs";
-
-      zramSwap = {
-        enable = true;
-        memoryPercent = 50;
-      };
-
-      services.journald.settings.Journal = {
-        Storage = "volatile";
-        RuntimeMaxUse = "16M";
-      };
-    };
-
-    gateway-api-crds = {
+    # storage-station's side of the clusters' storage: the LIO iSCSI target and the csi user democratic-csi logs
+    # in as, allowed to manage each cluster's dataset and nothing else
+    storage-server = {
       config,
       lib,
       pkgs,
       ...
     }: {
-      services.k3s.manifests = lib.mkIf (config.kubernetes.role == "server") {
-        gateway-api.source = pkgs.fetchurl {
-          url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/experimental-install.yaml";
-          hash = "sha256-8NXCsL7yudgLprqQnl5dveCABjhDdgg1P0Gm69OvzZ8=";
+      boot.kernelModules = [
+        "configfs"
+        "target_core_mod"
+        "iscsi_target_mod"
+      ];
+      environment.systemPackages = [pkgs.targetcli-fb];
+      # targetcli saves the target configuration to /etc/target; /etc is read-only, so that points into /var/lib
+      environment.etc."target".source = "/var/lib/target";
+
+      systemd.services.iscsi-target = {
+        description = "Restore the LIO iSCSI target configuration";
+        after = [
+          "network.target"
+          "local-fs.target"
+        ];
+        requires = ["sys-kernel-config.mount"];
+        wantedBy = ["multi-user.target"];
+        unitConfig.ConditionPathExists = "/var/lib/target/saveconfig.json";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${lib.getExe pkgs.python3Packages.rtslib-fb} restore";
+          ExecStop = "${lib.getExe pkgs.python3Packages.rtslib-fb} clear";
         };
       };
-    };
 
-    snapshot-crds = {
-      config,
-      lib,
-      pkgs,
-      ...
-    }: {
-      services.k3s.manifests = lib.mkIf (config.kubernetes.role == "server") {
-        volume-snapshot-crds.source = let
-          src = pkgs.fetchFromGitHub {
-            owner = "kubernetes-csi";
-            repo = "external-snapshotter";
-            rev = "v8.6.0";
-            hash = "sha256-9WSflI44XhecRqBWGKDfeMMHqOBwyInX9w2qMLDPylA=";
-          };
-        in
-          pkgs.runCommand "volume-snapshot-crds.yaml" {nativeBuildInputs = [pkgs.kubectl];} ''
-            kubectl kustomize -o $out ${src}/client/config/crd
-            echo "---" >> $out
-            kubectl kustomize ${src}/deploy/kubernetes/snapshot-controller >> $out
-          '';
+      security.sudo.extraRules = [
+        {
+          users = ["csi"];
+          commands = [
+            {
+              command = "/run/current-system/sw/bin/targetcli";
+              options = ["NOPASSWD"];
+            }
+          ];
+        }
+      ];
+
+      systemd.services.csi-zfs-delegation = {
+        description = "Delegate the clusters' datasets to the csi user";
+        after = ["zfs-import.target"];
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = [
+            "${config.boot.zfs.package}/bin/zfs allow -u csi create,destroy,mount,snapshot,clone,promote,rename,send,receive,hold,release,userprop,volsize,volblocksize,compression,refreservation,reservation,refquota,quota,snapdev ${clusters.main.storage.dataset}"
+            "${config.boot.zfs.package}/bin/zfs allow -u csi create,destroy,mount,snapshot,clone,promote,rename,send,receive,hold,release,userprop,volsize,volblocksize,compression,refreservation,reservation,refquota,quota,snapdev ${clusters.edge.storage.dataset}"
+          ];
+        };
       };
+
+      # The private key is in each cluster's democratic-csi driver config
+      users.users.csi = {
+        isSystemUser = true;
+        group = "csi";
+        shell = pkgs.bash;
+        openssh.authorizedKeys.keys = [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIzRhR3bAOQmT03QUu0pOgNq/xeq4Kgtoqu992QCOcGv democratic-csi@clusters"
+        ];
+      };
+      users.groups.csi = {};
     };
 
     flannel = {
@@ -141,7 +121,6 @@
       ];
     };
 
-    # CNI, kube-proxy replacement, Gateway API implementation, LoadBalancer IPs, Hubble
     cilium = {
       config,
       lib,
@@ -192,10 +171,9 @@
             kubeProxyReplacement = true;
             cni.exclusive = false;
             hubble.relay.enabled = true;
-            gatewayAPI = {
-              enabled = true;
-              enableAlpn = true;
-            };
+            # No L7 proxy of Cilium's own: the gateway and the mesh are Istio's
+            l7Proxy = false;
+            envoy.enabled = false;
             hubble.ui.enabled = true;
             hubble.ui.httpRoute = {
               enabled = true;
@@ -220,80 +198,6 @@
     }: {
       services.k3s.manifests = lib.mkIf (config.kubernetes.role == "server") {
         kube-vip.source = ./infra/kube-vip.yaml;
-      };
-    };
-
-    truenas-csi = {
-      config,
-      lib,
-      ...
-    }: let
-      cluster = config.kubernetes.cluster;
-      isServer = config.kubernetes.role == "server";
-    in {
-      services.openiscsi = {
-        enable = true;
-        name = "iqn.2026-09.host.burned:${config.networking.hostName}";
-      };
-
-      systemd.tmpfiles.rules = ["L+ /usr/sbin/iscsiadm - - - - ${config.services.openiscsi.package}/bin/iscsiadm"];
-
-      age.secrets = lib.mkIf isServer {
-        truenas-api-key.rekeyFile = ./secrets/truenas-api-key.age;
-      };
-
-      systemd.services.k3s.restartTriggers = lib.mkIf isServer [
-        config.age.secrets.truenas-api-key.file
-      ];
-
-      services.k3s = lib.mkIf isServer {
-        disable = [
-          "local-storage"
-        ];
-        manifests.truenas-api-key.source = config.age.secrets.truenas-api-key.path;
-        autoDeployCharts.tns-csi = {
-          repo = "oci://registry-1.docker.io/bfenski/tns-csi-driver";
-          version = "0.19.2";
-          hash = "sha256-1ip1vpFUpmqBVKueAFbMeD/G5QJuntJqbZ9q/I04E9A=";
-          targetNamespace = "kube-system";
-          extraFieldDefinitions = {
-            spec.bootstrap = true;
-          };
-          values = {
-            truenas = {
-              existingSecret = "truenas-api-key";
-              skipTLSVerify = true;
-            };
-            snapshots.enabled = true;
-            storageClasses = [
-              {
-                enabled = true;
-                name = "tns-csi-iscsi";
-                protocol = "iscsi";
-                pool = "tank";
-                parentDataset = cluster.storage.parentDataset;
-                isDefault = true;
-                server = "172.16.33.53";
-                nameTemplate = "{{ .PVCNamespace }}-{{ .PVCName }}";
-                adoptExisting = "true";
-                reclaimPolicy = "Retain";
-                deleteStrategy = "retain";
-              }
-              {
-                enabled = true;
-                name = "tns-csi-nfs";
-                protocol = "nfs";
-                pool = "tank";
-                parentDataset = cluster.storage.parentDataset;
-                server = "172.16.33.53";
-                nameTemplate = "{{ .PVCNamespace }}-{{ .PVCName }}";
-                adoptExisting = "true";
-                reclaimPolicy = "Retain";
-                deleteStrategy = "retain";
-              }
-            ];
-          };
-        };
       };
     };
 
@@ -473,7 +377,7 @@
           RuntimeDirectory = "argocd-ghcr-creds";
           RuntimeDirectoryMode = "0700";
           ExecStart = [
-            "${pkgs.coreutils}/bin/install -m 0600 ${(pkgs.formats.yaml {}).generate "argocd-ghcr-creds.yaml" {
+            "${pkgs.coreutils}/bin/install -m 0600 ${(pkgs.formats.json {}).generate "argocd-ghcr-creds.yaml" {
               apiVersion = "v1";
               kind = "Secret";
               metadata = {

@@ -210,7 +210,7 @@ spec:
             passwordKey: password
         persistence:
           enabled: true
-          storageClass: tns-csi-iscsi
+          storageClass: iscsi
           size: 20Gi
         startupProbe:
           enabled: true

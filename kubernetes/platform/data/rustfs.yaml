@@ -163,7 +163,7 @@ spec:
           storageclass:
             dataStorageSize: 60Gi
             logStorageSize: 1Gi
-            name: tns-csi-iscsi
+            name: iscsi
           config:
             rustfs:
               obs_log_directory: ""

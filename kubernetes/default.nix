@@ -1,9 +1,12 @@
+# The clusters: their options, what every node runs, and the generated nixosConfigurations and deploy targets. The
+# clusters themselves are defined in flake.nix, the add-ons in addons.nix.
 {
   self,
   inputs,
   lib,
   config,
   withSystem,
+  flake-parts-lib,
   ...
 }: let
   inherit (lib) mkOption types;
@@ -12,6 +15,14 @@ in {
   imports = [
     ./addons.nix
   ];
+
+  # deploy-rs nodes come from here and from flake.nix, so they have to merge
+  options.flake = flake-parts-lib.mkSubmoduleOptions {
+    deploy.nodes = mkOption {
+      type = types.lazyAttrsOf types.raw;
+      default = {};
+    };
+  };
 
   options.kubernetes.clusters = mkOption {
     description = "Kubernetes clusters, each with its nodes";
@@ -27,7 +38,7 @@ in {
         };
         init = mkOption {
           type = types.str;
-          description = "Server that initialises the cluster every other node joins it at <init>.local";
+          description = "Server that initialises the cluster; every other node joins it at <init>.local";
         };
         families = mkOption {
           type = types.listOf (types.enum ["ipv4" "ipv6"]);
@@ -57,9 +68,13 @@ in {
           default = [];
           description = "Blocks of the CiliumLoadBalancerIPPool, as written in its spec";
         };
-        storage.parentDataset = mkOption {
+        storage.dataset = mkOption {
           type = types.str;
-          description = "TrueNAS dataset holding this cluster's volumes; never shared between clusters";
+          description = "Dataset on storage-station holding this cluster's volumes (zvols named <namespace>-<pvc>); never shared between clusters";
+        };
+        storage.csiDriverConfig = mkOption {
+          type = types.path;
+          description = "agenix-rekey source of democratic-csi's driver config (a Secret manifest): the csi user's SSH key and this cluster's dataset on storage-station, never shared between clusters";
         };
         ca = mkOption {
           type = types.nullOr (types.submodule {
@@ -82,6 +97,11 @@ in {
               role = mkOption {type = types.enum ["server" "agent"];};
               system = mkOption {type = types.enum ["x86_64-linux" "aarch64-linux"];};
               hostPubkey = mkOption {type = types.str;};
+              deploy = mkOption {
+                type = types.bool;
+                default = true;
+                description = "Whether the node gets a deploy-rs target; false for a node built into another machine";
+              };
               modules = mkOption {
                 type = types.listOf types.deferredModule;
                 default = [];
@@ -94,102 +114,9 @@ in {
     });
   };
 
-  config.kubernetes.clusters = {
-    main = {
-      domain = "burned.host";
-      internalDomain = "internal.k8s.burned.host";
-      init = "k8s-node-1";
-      tokenFile = ./secrets/join-token.age;
-      loadBalancerPool = [
-        {cidr = "172.16.33.200/32";}
-      ];
-      storage.parentDataset = "tank/kubernetes";
-      modules = with self.nixosModules; [
-        gateway-api-crds
-        snapshot-crds
-        cilium
-        kube-vip
-        truenas-csi
-        openbao
-        argocd
-      ];
-      nodes = {
-        k8s-node-1 = {
-          role = "server";
-          system = "x86_64-linux";
-          hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBgayw+LEcOM0N62lRmY67rwsut5AlQzH7s30qi1/uKE";
-          modules = with self.nixosModules; [
-            hyperv-vm
-            vm-disk
-          ];
-        };
-        k8s-node-2 = {
-          role = "server";
-          system = "x86_64-linux";
-          hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILg/ncWfxWXZX4oLFq13dgzcNoOyurb+fkicj4E4G9MC";
-          modules = with self.nixosModules; [
-            hyperv-vm
-            vm-disk
-          ];
-        };
-        k8s-node-3 = {
-          role = "server";
-          system = "x86_64-linux";
-          hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICsEqPnBF3JpXgFLVa37SjdKyiOBAbrj1KDtb9dSH/44";
-          modules = with self.nixosModules; [
-            hyperv-vm
-            vm-disk
-          ];
-        };
-      };
-    };
-
-    edge = {
-      domain = "edge.burned.host";
-      internalDomain = "internal.edge.burned.host";
-      init = "k8s-node-x86-64-1";
-      tokenFile = ./secrets/edge-join-token.age;
-      storage.parentDataset = "tank/kubernetes-edge";
-      ca = {
-        cert = ./secrets/edge-ca-crt.age;
-        key = ./secrets/edge-ca-key.age;
-      };
-      modules = with self.nixosModules; [
-        gateway-api-crds
-        snapshot-crds
-        flannel
-        truenas-csi
-        argocd-spoke
-        mktxp
-      ];
-      nodes = {
-        k8s-node-x86-64-1 = {
-          role = "server";
-          system = "x86_64-linux";
-          hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDvQMlh94ENInyK8lViex3F7PFkaICrpvf3Xr5E0/Hx3";
-          modules = with self.nixosModules; [
-            qemu-vm
-            vm-disk
-            {disko.devices.disk.main.device = "/dev/vda";}
-          ];
-        };
-        k8s-node-aarch64-1 = {
-          role = "agent";
-          system = "aarch64-linux";
-          hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID0s5TvAii/foOw3yNLcvHURHZPL+j4p1HwvbgP3ea1X";
-          modules = [self.nixosModules.raspberry-pi-3];
-        };
-        k8s-node-aarch64-2 = {
-          role = "agent";
-          system = "aarch64-linux";
-          hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK6Befn24tvAQ9f+nPX3giRZB2mVfggSX2CCdhnE4Ss";
-          modules = [self.nixosModules.raspberry-pi-3];
-        };
-      };
-    };
-  };
-
   config.flake = {
+    # k3s with what both clusters need: open-iscsi and democratic-csi against storage-station, the Gateway API and
+    # volume snapshot CRDs, the ghcr.io pull credentials
     nixosModules.kubernetes-node = {
       config,
       lib,
@@ -206,6 +133,8 @@ in {
         role = lib.mkOption {type = lib.types.enum ["server" "agent"];};
       };
 
+      # Charts are declared as autoDeployCharts for their options, but written as manifests (nixos/<name>.yaml) so
+      # a chart can be bootstrapped before the API server is up and removed with its manifest
       options.services.k3s.manifests = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule ({name, ...}: {
           config.target = lib.mkOverride 900 "nixos/${name}.yaml";
@@ -219,39 +148,47 @@ in {
       };
 
       config = {
-        systemd.tmpfiles.rules = lib.mkIf isServer [
-          "R /var/lib/rancher/k3s/server/manifests/nixos - - - - -"
+        systemd.tmpfiles.rules =
+          [
+            "d /var/lib/rancher/etc 0755 root root - -"
+            "d /var/lib/rancher/cni 0755 root root - -"
+            "d /var/lib/iscsi/nodes 0700 root root - -"
+            "d /var/lib/iscsi/send_targets 0700 root root - -"
+            "d /var/lib/iscsi/ifaces 0700 root root - -"
+            "L+ /usr/sbin/iscsiadm - - - - ${config.services.openiscsi.package}/bin/iscsiadm"
+          ]
+          ++ lib.optional isServer "R /var/lib/rancher/k3s/server/manifests/nixos - - - - -";
+
+        # k3s, the CNI and iscsid write under /etc; /etc is read-only, so those paths point into persisted state
+        environment.etc = {
+          "rancher".source = "/var/lib/rancher/etc";
+          "cni".source = "/var/lib/rancher/cni";
+          "iscsi/iscsid.conf".source = "/var/lib/iscsi/iscsid.conf";
+          "iscsi/nodes".source = "/var/lib/iscsi/nodes";
+          "iscsi/send_targets".source = "/var/lib/iscsi/send_targets";
+          "iscsi/ifaces".source = "/var/lib/iscsi/ifaces";
+        };
+        environment.persistence."/persist".directories = [
+          "/var/lib/rancher"
+          "/var/lib/kubelet"
+          "/var/lib/iscsi"
         ];
 
-        services.k3s.manifests = lib.mapAttrs (name: chart: {source = chart.source;}) config.services.k3s.autoDeployCharts;
-        services.k3s.charts = lib.mapAttrs (name: chart: chart.package) config.services.k3s.autoDeployCharts;
-
-        boot.kernelModules = [
-          "iptables_nat"
-          "iptables_filter"
-          "iptables6_nat"
-          "iptables6_filter"
-        ];
+        # Cilium turns off reverse-path filtering on the pods' interfaces by writing a file into /etc/sysctl.d,
+        # which a read-only /etc refuses; without it the kernel drops the pods' replies
+        boot.kernel.sysctl."net.ipv4.conf.lxc*.rp_filter" = 0;
 
         networking = {
           usePredictableInterfaceNames = false;
+          # The CNI's interfaces are outside NetworkManager's connection settings
           tempAddresses = "disabled";
-          networkmanager = {
-            unmanaged = [
-              "interface-name:lxc*"
-              "interface-name:cilium*"
-              "interface-name:flannel*"
-              "interface-name:cni*"
-              "interface-name:veth*"
-            ];
-            settings.connection = {
-              "ipv4.dhcp-client-id" = "mac";
-              "ipv4.dhcp-ipv6-only-preferred" = 2; # auto
-              "ipv6.addr-gen-mode" = 0; # eui64
-              "ipv6.ip6-privacy" = 0;
-              "ipv6.dhcp-duid" = "ll";
-            };
-          };
+          networkmanager.unmanaged = [
+            "interface-name:lxc*"
+            "interface-name:cilium*"
+            "interface-name:flannel*"
+            "interface-name:cni*"
+            "interface-name:veth*"
+          ];
           firewall = {
             checkReversePath = false;
             allowedTCPPorts = [
@@ -290,12 +227,24 @@ in {
           kubernetes-helm
         ];
 
-        age.secrets.join-token = {
-          rekeyFile = cluster.tokenFile;
-          generator.script = "alnum";
+        services.openiscsi = {
+          enable = true;
+          name = "iqn.2026-09.host.burned:${config.networking.hostName}";
         };
 
-        age.secrets.ghcr-token.rekeyFile = ./secrets/ghcr-token.age;
+        age.secrets = lib.mkMerge [
+          {
+            join-token = {
+              rekeyFile = cluster.tokenFile;
+              generator.script = "alnum";
+            };
+            ghcr-token.rekeyFile = ./secrets/ghcr-token.age;
+          }
+          (lib.mkIf isServer {
+            democratic-csi-config.rekeyFile = cluster.storage.csiDriverConfig;
+          })
+        ];
+
         systemd.services.ghcr-registries = {
           description = "Render k3s registries.yaml with the ghcr.io token";
           wantedBy = ["k3s.service"];
@@ -317,7 +266,10 @@ in {
             ];
           };
         };
-        systemd.services.k3s.restartTriggers = [config.age.secrets.ghcr-token.file];
+
+        systemd.services.k3s.restartTriggers =
+          [config.age.secrets.ghcr-token.file]
+          ++ lib.optional isServer config.age.secrets.democratic-csi-config.file;
 
         services.k3s = {
           enable = true;
@@ -328,6 +280,7 @@ in {
           disable = lib.mkIf isServer [
             "traefik"
             "servicelb"
+            "local-storage"
           ];
           extraFlags = lib.mkMerge [
             ["--private-registry /run/ghcr-registries/registries.yaml"]
@@ -339,6 +292,72 @@ in {
               "--service-cidr=${lib.concatMapStringsSep "," (family: cluster.serviceCidr.${family}) cluster.families}"
             ])
           ];
+
+          charts = lib.mapAttrs (name: chart: chart.package) config.services.k3s.autoDeployCharts;
+          manifests = lib.mkMerge [
+            (lib.mapAttrs (name: chart: {source = chart.source;}) config.services.k3s.autoDeployCharts)
+            (lib.mkIf isServer {
+              gateway-api.source = pkgs.fetchurl {
+                url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/experimental-install.yaml";
+                hash = "sha256-cvVJ/1dBbi4QhcW+Fxj1+GEIqnWsObS8J8HHrvFJcSc=";
+              };
+              volume-snapshot-crds.source = let
+                src = pkgs.fetchFromGitHub {
+                  owner = "kubernetes-csi";
+                  repo = "external-snapshotter";
+                  rev = "v8.6.0";
+                  hash = "sha256-9WSflI44XhecRqBWGKDfeMMHqOBwyInX9w2qMLDPylA=";
+                };
+              in
+                pkgs.runCommand "volume-snapshot-crds.yaml" {nativeBuildInputs = [pkgs.kubectl];} ''
+                  kubectl kustomize -o $out ${src}/client/config/crd
+                  echo "---" >> $out
+                  kubectl kustomize ${src}/deploy/kubernetes/snapshot-controller >> $out
+                '';
+              democratic-csi-config.source = config.age.secrets.democratic-csi-config.path;
+            })
+          ];
+
+          # Volumes are zvols under the cluster's dataset on storage-station, exported over iSCSI; democratic-csi
+          # logs in there as the csi user over SSH. Names stay <namespace>-<pvc>, so a reinstalled cluster re-adopts
+          # them. Never declare a claim smaller than its zvol: the driver would shrink it.
+          autoDeployCharts.democratic-csi = lib.mkIf isServer {
+            repo = "https://democratic-csi.github.io/charts/";
+            name = "democratic-csi";
+            version = "0.15.1";
+            hash = "sha256-PYfhKc6kbUnYEOnlCFth0GwBoxO8+SFg49EGrcMEJu0=";
+            targetNamespace = "kube-system";
+            extraFieldDefinitions = {
+              spec.bootstrap = true;
+            };
+            values = {
+              csiDriver.name = "org.democratic-csi.iscsi";
+              driver = {
+                existingConfigSecret = "democratic-csi-driver-config";
+                config.driver = "zfs-generic-iscsi";
+              };
+              # The chart defaults to "latest"
+              controller.driver.image.tag = "latest@sha256:944d0e65077efbd9c1fdf23997eec8fac4b4bfb7c3de400f63e33a0a849c5ced";
+              node.driver.image.tag = "latest@sha256:944d0e65077efbd9c1fdf23997eec8fac4b4bfb7c3de400f63e33a0a849c5ced";
+              storageClasses = [
+                {
+                  name = "iscsi";
+                  defaultClass = true;
+                  reclaimPolicy = "Retain";
+                  volumeBindingMode = "Immediate";
+                  allowVolumeExpansion = true;
+                  parameters.fsType = "ext4";
+                }
+              ];
+              volumeSnapshotClasses = [
+                {
+                  name = "iscsi-snapshot";
+                  deletionPolicy = "Delete";
+                  parameters.detachedSnapshots = "false";
+                }
+              ];
+            };
+          };
         };
       };
     };
@@ -349,8 +368,7 @@ in {
           inputs.nixpkgs.lib.nixosSystem {
             modules =
               [
-                self.nixosModules.common-nix-module
-                self.nixosModules.artur
+                self.nixosModules.base
                 self.nixosModules.kubernetes-node
                 {
                   networking.hostName = nodeName;
@@ -377,7 +395,7 @@ in {
           path = inputs.deploy-rs.lib.${node.system}.activate.nixos self.nixosConfigurations.${nodeName};
         };
       })
-      cluster.nodes)
+      (lib.filterAttrs (nodeName: node: node.deploy) cluster.nodes))
     cfg.clusters;
   };
 }
