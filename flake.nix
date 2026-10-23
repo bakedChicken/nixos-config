@@ -137,6 +137,9 @@
 
               boot.kernelPackages = pkgs.linuxPackages_latest;
 
+              # Swap in compressed memory, not on disk: swap on a ZFS zvol can deadlock, and the SD cards would wear
+              zramSwap.enable = true;
+
               # One address per family per machine, the same after a reinstall: DHCP reservations by MAC, EUI-64, no
               # privacy addresses. CLAT and the IPv6-only DHCP option, so a machine works on an IPv6-only network too.
               networking.useDHCP = false;
@@ -332,11 +335,6 @@
               boot.loader.systemd-boot.enable = true;
               fileSystems."/".fsType = "btrfs";
 
-              zramSwap = {
-                enable = true;
-                memoryPercent = 50;
-              };
-
               services.journald.settings.Journal = {
                 Storage = "volatile";
                 RuntimeMaxUse = "16M";
@@ -443,6 +441,38 @@
                           device = "tank/system/persist";
                           fsType = "zfs";
                         };
+                        # The pools themselves aren't mounted. nofail: a mount that hangs (ZFS under load) must not
+                        # fail local-fs.target; the services that use one require it instead.
+                        "/home" = {
+                          device = "tank/home";
+                          fsType = "zfs";
+                          options = ["nofail"];
+                        };
+                        "/home/artur" = {
+                          device = "tank/home/artur";
+                          fsType = "zfs";
+                          options = ["nofail"];
+                        };
+                        "/srv/media" = {
+                          device = "dozer/media";
+                          fsType = "zfs";
+                          options = ["nofail"];
+                        };
+                        "/srv/3d-models" = {
+                          device = "dozer/data/3d-models";
+                          fsType = "zfs";
+                          options = ["nofail"];
+                        };
+                        "/srv/time-machine" = {
+                          device = "dozer/backups/time-machine";
+                          fsType = "zfs";
+                          options = ["nofail"];
+                        };
+                        "/srv/vm-archive" = {
+                          device = "dozer/backups/vm-archive";
+                          fsType = "zfs";
+                          options = ["nofail"];
+                        };
                       };
 
                       boot.supportedFilesystems.zfs = true;
@@ -484,7 +514,7 @@
                             useTemplate = ["production"];
                             recursive = true;
                           };
-                          "tank/users" = {
+                          "tank/home" = {
                             useTemplate = ["production"];
                             recursive = true;
                           };
@@ -526,7 +556,6 @@
                       systemd.tmpfiles.rules = ["d /nix/var/nix/builds 0755 root root 7d"];
 
                       users.users.artur = {
-                        home = "/tank/users/artur";
                         extraGroups = [
                           "designers"
                           "apps"

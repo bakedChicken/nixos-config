@@ -60,7 +60,7 @@ The root Application (~infra/argocd-bootstrap.yaml~) syncs the top-level files: 
 | ~data/~          | CloudNativePG operator (0); Barman Cloud plugin (10); RustFS and its ~rustfs-users~ Job (33-35); ~default-postgres-cluster~ and its backups to RustFS (39-40)                                                         |
 | ~identity/~      | Keycloak operator (0); database, Keycloak at ~auth.burned.host~, ~burned~ realm (50-52); clients added by the ~keycloak-config~ Job (53-54)                                                                           |
 | ~observability/~ | alerting rules, Loki, Tempo, Pyroscope, Grafana, Alloy, OpenTelemetry Operator, VictoriaMetrics (69-72); ~Instrumentation~ (80); Kiali (95-96)                                                                        |
-| ~apps/~          | Nextcloud at ~nextcloud.burned.host~ (94); Cloudflare tunnel (95)                                                                                                                                                     |
+| ~apps/~          | Nextcloud at ~nextcloud.burned.host~ (94); Cloudflare tunnel, Lintel at ~lintel.internal.k8s.burned.host~ (95)                                                                                                                                                     |
 
 An app gets its namespace, a database in the shared cluster (a ~Database~ and ~DatabaseRole~ in ~postgres~, as in ~platform/identity/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/foundation/openbao.yaml~, a line in the ~rustfs-users~ Job and its secret in ~platform/data/rustfs.yaml~, an ~ExternalSecret~ in its namespace).
 

@@ -24,7 +24,7 @@
         "fruit:nfs_aces" = "no";
       };
       "3d-models" = {
-        "path" = "/dozer/data/3d-models";
+        "path" = "/srv/3d-models";
         "read only" = "no";
         "valid users" = "@designers";
         "force group" = "designers";
@@ -32,7 +32,7 @@
         "directory mask" = "0770";
       };
       "time-machine" = {
-        "path" = "/dozer/backups/time-machine";
+        "path" = "/srv/time-machine";
         "read only" = "no";
         "valid users" = "artur";
         "create mask" = "0700";
@@ -70,8 +70,18 @@
     openFirewall = true;
   };
 
+  # The shares' and the media's datasets are nofail mounts (flake.nix); without them the services would write to
+  # the empty directories on the tmpfs root
+  systemd.services.samba-smbd.unitConfig.RequiresMountsFor = [
+    "/srv/3d-models"
+    "/srv/time-machine"
+  ];
+  systemd.services.radarr.unitConfig.RequiresMountsFor = ["/srv/media"];
+  systemd.services.plex.unitConfig.RequiresMountsFor = ["/srv/media"];
+  systemd.services.podman-sonarr.unitConfig.RequiresMountsFor = ["/srv/media"];
+
   # The media apps: NixOS services as the apps user, each with its state on its own dataset under tank/apps, the
-  # media on /dozer/media, listening on localhost behind nginx. nofail: a mount that hangs (ZFS under load) must
+  # media on /srv/media, listening on localhost behind nginx. nofail: a mount that hangs (ZFS under load) must
   # not fail local-fs.target, which would drop the machine into emergency mode
   fileSystems."/var/lib/radarr" = {
     device = "tank/apps/radarr";
@@ -132,7 +142,7 @@
       user = "568:568";
       volumes = [
         "/var/lib/sonarr:/config"
-        "/dozer/media:/dozer/media"
+        "/srv/media:/srv/media"
       ];
       environment = {
         TZ = "Europe/Vienna";
@@ -168,7 +178,7 @@
     };
     bindMounts = {
       "/var/lib/qbittorrent".isReadOnly = false;
-      "/dozer/media".isReadOnly = false;
+      "/srv/media".isReadOnly = false;
     };
     config = {
       networking.useHostResolvConf = false;
