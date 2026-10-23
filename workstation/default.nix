@@ -75,6 +75,44 @@
         services.desktopManager.plasma6.enable = true;
         services.displayManager.sddm.enable = true;
 
+        # Plasma's defaults for every user (home is erased on boot): 200% scale on xrdp's screen, a cursor
+        # twice the default size (the default 24px, which Plasma doubles with the scale), no lock screen, and
+        # no dimming, blanking or sleeping when idle
+        environment.etc = {
+          "xdg/kdeglobals".text = ''
+            [KScreen]
+            ScaleFactor=2
+            ScreenScaleFactors=rdp0=2;
+          '';
+          "xdg/kcmfonts".text = ''
+            [General]
+            forceFontDPI=192
+          '';
+          "xdg/kcminputrc".text = ''
+            [Mouse]
+            cursorSize=24
+          '';
+          "xdg/kscreenlockerrc".text = ''
+            [Daemon]
+            Autolock=false
+            LockOnResume=false
+          '';
+          "xdg/powerdevilrc".text = ''
+            [AC][Display]
+            DimDisplayWhenIdle=false
+            TurnOffDisplayWhenIdle=false
+
+            [AC][SuspendAndShutdown]
+            AutoSuspendAction=0
+          '';
+        };
+
+        # Apps Plasma brings outside its package list: the KDE PIM suite (KMail, Kontact, Merkuro,
+        # Akonadi), the Orca screen reader and X's xterm
+        programs.kde-pim.enable = false;
+        services.orca.enable = false;
+        services.xserver.excludePackages = [pkgs.xterm];
+
         environment.plasma6.excludePackages = with pkgs; [
           kdePackages.elisa
           kdePackages.kate
