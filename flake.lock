@@ -451,11 +451,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1792797492,
-        "narHash": "sha256-IPs7VK1JHKqe9Y7+brKBsyVAnFvKzAOZua3sAq5itFg=",
+        "lastModified": 1792797898,
+        "narHash": "sha256-vZbdUr5m72Tyty2Q7TRABIPJR3jWL2U5++ZEsnfWdcE=",
         "ref": "refs/heads/main",
-        "rev": "34200c5577d509b8d3184b0a524bbe379ecd1d7b",
-        "revCount": 44,
+        "rev": "6f999176c4838349da7a2e89b4818279fd3d48a9",
+        "revCount": 45,
         "type": "git",
         "url": "ssh://git@github.com/bakedChicken/lintel"
       },
