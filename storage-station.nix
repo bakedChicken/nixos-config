@@ -1,4 +1,5 @@
-# storage-station's services: SMB shares, the media apps, the edge cluster's server container, the dashboard.
+# storage-station's services: SMB shares, the 3D model library, the media apps, the edge cluster's server container, the
+# dashboard.
 # The machine itself (board, boot, pools, network, users) is in flake.nix.
 {
   config,
@@ -69,6 +70,19 @@
     enable = true;
     openFirewall = true;
   };
+
+  # Lintel, the 3D model library over the 3d-models share, behind nginx. It runs as its own user in the designers group
+  # (it adds drops to the share and moves approved removals into its hold area) and keeps everything in the share's
+  # hidden .lintel/, the tidy library included. It may snapshot the share's dataset: one before every command that
+  # writes. The first start serves the Welcome page; its setup code is in journalctl -u lintel
+  services.lintel = {
+    enable = true;
+    library = "/srv/3d-models";
+    extraGroups = ["designers"];
+    zfsDataset = "dozer/data/3d-models";
+  };
+  users.users.lintel.uid = 569;
+  users.groups.lintel.gid = 569;
 
   # The shares' and the media's datasets are nofail mounts (flake.nix); without them the services would write to
   # the empty directories on the tmpfs root
@@ -261,6 +275,20 @@
         useACMEHost = "internal.storage-station.burned.host";
         locations."/".proxyPass = "http://10.233.1.2:8080";
       };
+      # Live updates are a server-sent event stream; browser drops are resumable uploads in 32 MB chunks
+      "lintel.internal.storage-station.burned.host" = {
+        forceSSL = true;
+        useACMEHost = "internal.storage-station.burned.host";
+        locations."/" = {
+          proxyPass = "http://127.0.0.1:8420";
+          extraConfig = ''
+            proxy_buffering off;
+            proxy_request_buffering off;
+            proxy_read_timeout 1h;
+            client_max_body_size 64m;
+          '';
+        };
+      };
     };
   };
   networking.firewall.allowedTCPPorts = [
@@ -437,6 +465,10 @@
                     {
                       title = "FlareSolverr";
                       url = "http://127.0.0.1:8191/health";
+                    }
+                    {
+                      title = "Lintel";
+                      url = "http://127.0.0.1:8420/api/v1/health";
                     }
                   ];
                 }

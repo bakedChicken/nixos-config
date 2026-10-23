@@ -51,6 +51,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
+
+    # The 3D model library on storage-station. Built with its own nixpkgs (the Go and Node versions it
+    # is tested with); private repository, so fetched over SSH
+    lintel.url = "git+ssh://git@github.com/bakedChicken/lintel";
   };
 
   outputs = inputs @ {
@@ -391,6 +395,7 @@
                     self.nixosModules.base
                     self.nixosModules.ephemeral
                     self.nixosModules.storage-server
+                    inputs.lintel.nixosModules.default
                     ./storage-station.nix
                     ({pkgs, ...}: {
                       networking.hostName = "storage-station";

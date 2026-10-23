@@ -16,7 +16,7 @@ One flake for every machine I run: a storage server, two Kubernetes (k3s) cluste
 | File                              | Holds                                                                                                                                     |
 |-----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------|
 | ~flake.nix~                       | inputs, the shared modules, and every machine: the development machines, storage-station's hardware and OS, both clusters and their nodes |
-| ~storage-station.nix~             | storage-station's services: SMB, media apps, reverse proxy, the edge server's container host, dashboard                                   |
+| ~storage-station.nix~             | storage-station's services: SMB, the 3D model library (Lintel), media apps, reverse proxy, the edge server's container host, dashboard   |
 | ~workstation/~                    | the development machines' desktop and artur's home-manager configuration                                                                  |
 | ~kubernetes/~                     | what every cluster node runs, the cluster add-ons, and the platform Argo CD syncs                                                         |
 | ~secrets/~, ~kubernetes/secrets/~ | agenix secrets; ~rekeyed/~ holds them encrypted per machine                                                                               |
