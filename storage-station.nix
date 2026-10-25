@@ -70,6 +70,15 @@
     openFirewall = true;
   };
 
+  services.lintel = {
+    enable = true;
+    library = "/srv/3d-models";
+    extraGroups = ["designers"];
+    zfsDataset = "dozer/data/3d-models";
+  };
+  users.users.lintel.uid = 569;
+  users.groups.lintel.gid = 569;
+
   # The shares' and the media's datasets are nofail mounts (flake.nix); without them the services would write to
   # the empty directories on the tmpfs root
   systemd.services.samba-smbd.unitConfig.RequiresMountsFor = [
@@ -261,6 +270,19 @@
         useACMEHost = "internal.storage-station.burned.host";
         locations."/".proxyPass = "http://10.233.1.2:8080";
       };
+      "lintel.internal.storage-station.burned.host" = {
+        forceSSL = true;
+        useACMEHost = "internal.storage-station.burned.host";
+        locations."/" = {
+          proxyPass = "http://127.0.0.1:8420";
+          extraConfig = ''
+            proxy_buffering off;
+            proxy_request_buffering off;
+            proxy_read_timeout 1h;
+            client_max_body_size 64m;
+          '';
+        };
+      };
     };
   };
   networking.firewall.allowedTCPPorts = [
@@ -437,6 +459,10 @@
                     {
                       title = "FlareSolverr";
                       url = "http://127.0.0.1:8191/health";
+                    }
+                    {
+                      title = "Lintel";
+                      url = "http://127.0.0.1:8420/api/v1/health";
                     }
                   ];
                 }
