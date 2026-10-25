@@ -335,6 +335,7 @@ spec:
                 - access: proxy
                   database: postgres
                   jsonData:
+                    database: postgres
                     postgresVersion: 1800
                     sslmode: disable
                   name: Postgres

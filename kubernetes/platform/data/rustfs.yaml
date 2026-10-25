@@ -280,3 +280,25 @@ spec:
             path:
               type: ReplaceFullPath
               replaceFullPath: /rustfs/console/
+---
+# Uploads from workstations and the Beer Tree GPU runner (home network and VPN only)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rustfs-s3
+  namespace: rustfs-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "35"
+spec:
+  parentRefs:
+    - name: burned-gateway
+      namespace: gateway-system
+      sectionName: internal-https
+  hostnames:
+    - s3.internal.k8s.burned.host
+  rules:
+    - backendRefs:
+        - name: rustfs-svc
+          port: 9000
+      timeouts:
+        request: 0s

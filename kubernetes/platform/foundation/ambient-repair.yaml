@@ -1,0 +1,114 @@
+# Ambient pods that are not enrolled in the mesh never get traffic: every connection to them is
+# refused, because their in-pod ztunnel listener on 15008 is missing. It happens after a node
+# reboot to pods that start while the node's mesh is coming up (2026-10-24: Keycloak, vmselect,
+# loki, pyroscope). Evicted, they come back on a ready mesh. Istio's own repair controller covers
+# sidecars only.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ambient-repair
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ambient-repair
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ambient-repair
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ambient-repair
+subjects:
+  - kind: ServiceAccount
+    name: ambient-repair
+    namespace: istio-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ambient-repair
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+data:
+  repair.sh: |
+    set -eu
+    MIN_AGE=180   # leave pods that are still starting alone
+    refused() { ! timeout 3 bash -c "</dev/tcp/$1/15008" 2>/dev/null; }
+    for ns in $(kubectl get ns -l istio.io/dataplane-mode=ambient -o jsonpath='{.items[*].metadata.name}'); do
+      kubectl get pods -n "$ns" -o json | jq -r '.items[]
+        | select(.status.phase == "Running" and (.spec.hostNetwork | not) and .status.podIP != null
+                 and (.metadata.labels["istio.io/dataplane-mode"] // "") != "none")
+        | "\(.metadata.name) \(.status.podIP) \(now - (.status.startTime | fromdateiso8601) | floor)"' |
+      while read -r pod ip age; do
+        [ "$age" -ge $MIN_AGE ] || continue
+        # twice, a few seconds apart: a pod mid-restart can refuse once
+        if refused "$ip" && sleep 5 && refused "$ip"; then
+          echo "$ns/$pod ($ip) refuses 15008: not in the mesh, evicting"
+          printf '{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"%s","namespace":"%s"}}' "$pod" "$ns" |
+            kubectl create --raw "/api/v1/namespaces/$ns/pods/$pod/eviction" -f - >/dev/null \
+            || echo "  not evicted now (disruption budget?); next run"
+          sleep 30   # one at a time: let the replacement come up
+        fi
+      done
+    done
+    echo "done"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ambient-repair
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1200
+      template:
+        metadata:
+          labels:
+            app: ambient-repair
+            istio.io/dataplane-mode: none
+        spec:
+          serviceAccountName: ambient-repair
+          restartPolicy: Never
+          containers:
+            - name: repair
+              image: docker.io/alpine/k8s:1.36.4
+              command: ["bash", "/script/repair.sh"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /script
+          volumes:
+            - name: script
+              configMap:
+                name: ambient-repair
