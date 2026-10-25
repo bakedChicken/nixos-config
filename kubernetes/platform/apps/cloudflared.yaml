@@ -48,6 +48,12 @@ data:
         service: http://demo.app-demo.svc.cluster.local:8080
       - hostname: nextcloud.burned.host
         service: http://nextcloud.nextcloud.svc.cluster.local:8080
+      # Beer Tree: only what the phone app calls; the admin panel stays internal
+      - hostname: beer-tree.burned.host
+        path: ^/(app|recognize|detect|feedback|beers|labels|health)(/|$)
+        service: http://api.app-beer-tree.svc.cluster.local:8000
+      - hostname: beer-tree.burned.host
+        service: http_status:404
       - service: http_status:404
 ---
 apiVersion: apps/v1

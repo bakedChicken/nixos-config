@@ -343,6 +343,21 @@ spec:
                   type: postgres
                   url: default-postgres-cluster-rw.postgres.svc.cluster.local:5432
                   user: grafana
+                # Beer Tree's database, read-only (the app's migrations grant `grafana` select); its
+                # dashboards come from the app's deploy/grafana ConfigMaps
+                - access: proxy
+                  database: beertree
+                  jsonData:
+                    database: beertree
+                    postgresVersion: 1800
+                    sslmode: disable
+                  name: Beer Tree
+                  uid: beer-tree
+                  secureJsonData:
+                    password: $GRAFANA_POSTGRES_PASSWORD
+                  type: postgres
+                  url: default-postgres-cluster-rw.postgres.svc.cluster.local:5432
+                  user: grafana
           envValueFrom:
             GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
               secretKeyRef:
@@ -367,6 +382,12 @@ spec:
               scopes: openid profile email
               token_url: https://auth.burned.host/realms/burned/protocol/openid-connect/token
               use_pkce: true
+            # Beer Tree's admin page (beer-tree.internal.k8s.burned.host, same site) frames the dashboards
+            security:
+              allow_embedding: true
+            # Beer Tree's per-country map uses the geomap "dynamic GeoJSON" layer (alpha)
+            panels:
+              enable_alpha: true
             server:
               root_url: https://grafana.internal.k8s.burned.host
           route:

@@ -1,0 +1,141 @@
+# Beer Tree: beer label recognition (github.com/bakedChicken/beer-tree). The platform gives it a
+# namespace, a database, a RustFS bucket and its secrets; the workloads come from the repository's
+# deploy/ artifact. Admin panel at beer-tree.internal.k8s.burned.host; the phone endpoints are also
+# public at beer-tree.burned.host through the tunnel (cloudflared.yaml).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-beer-tree
+  labels:
+    istio.io/dataplane-mode: ambient
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: beertree
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: beertree
+  login: true
+  ensure: present
+  passwordSecret:
+    name: beer-tree-pg-creds
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: beertree
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: beertree
+  owner: beertree
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: beer-tree-pg-creds
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: beer-tree-pg-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: beertree
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: beer-tree/db
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: beer-tree
+  namespace: app-beer-tree
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: beer-tree
+    template:
+      type: Opaque
+      data:
+        DATABASE_URL: "postgresql://beertree:{{ .db_password }}@default-postgres-cluster-rw.postgres.svc.cluster.local:5432/beertree"
+        S3_ENDPOINT: http://rustfs-svc.rustfs-system.svc.cluster.local:9000
+        S3_PUBLIC_ENDPOINT: https://s3.internal.k8s.burned.host
+        S3_BUCKET: beer-tree
+        S3_ACCESS_KEY: beer-tree
+        S3_SECRET_KEY: "{{ .rustfs_secret_key }}"
+        APP_TOKEN: "{{ .app_token }}"
+        RUNNER_TOKEN: "{{ .runner_token }}"
+  data:
+    - secretKey: db_password
+      remoteRef:
+        key: beer-tree/db
+        property: password
+    - secretKey: rustfs_secret_key
+      remoteRef:
+        key: beer-tree/rustfs
+        property: secret_key
+    - secretKey: app_token
+      remoteRef:
+        key: beer-tree/app-token
+        property: token
+    - secretKey: runner_token
+      remoteRef:
+        key: beer-tree/runner-token
+        property: token
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: beer-tree
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "95"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app-beer-tree
+  source:
+    repoURL: oci://ghcr.io/bakedchicken/beer-tree-deploy
+    targetRevision: latest
+    path: .
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

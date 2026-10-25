@@ -78,6 +78,10 @@ spec:
       remoteRef:
         key: pyroscope/rustfs
         property: secret_key
+    - secretKey: beer-tree
+      remoteRef:
+        key: beer-tree/rustfs
+        property: secret_key
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -161,7 +165,7 @@ spec:
           secret:
             existingSecret: rustfs-root-creds
           storageclass:
-            dataStorageSize: 60Gi
+            dataStorageSize: 500Gi
             logStorageSize: 1Gi
             name: iscsi
           config:
@@ -190,6 +194,7 @@ spec:
                   setup loki loki
                   setup tempo tempo
                   setup pyroscope pyroscope
+                  setup beer-tree beer-tree
             - apiVersion: batch/v1
               kind: Job
               metadata:
