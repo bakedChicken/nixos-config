@@ -59,12 +59,12 @@ One flake for every machine I run: a storage server, two Kubernetes (k3s) cluste
 + ~base~: Nix, agenix, the latest kernel, NetworkManager, avahi for ~.local~ names, resolved for unicast DNS, SSH, the ~artur~ user. Addresses come only from DHCP reservations (by MAC) and SLAAC (EUI-64), so they stay the same across reinstalls.
 + ~ephemeral~: ~/~ is a tmpfs and ~/etc~ a read-only overlay; users exist only as declared. What survives a reboot is on ~/persist~:
 
-| Machine role    | Persisted                                                                                     |
-|-----------------+-----------------------------------------------------------------------------------------------|
+| Machine role    | Persisted                                                                                                     |
+|-----------------+---------------------------------------------------------------------------------------------------------------|
 | every machine   | ~/var/lib/{nixos,systemd,NetworkManager}~, ~/var/log~, SSH host keys (the agenix identity), ~/etc/machine-id~ |
-| cluster node    | ~/var/lib/{rancher,kubelet,iscsi}~; ~/etc/rancher~, ~/etc/cni~ and ~/etc/iscsi/*~ link into them |
-| workstation     | artur's ~Documents~, ~Downloads~, ~.ssh~, ~.config/mozilla~, ~.local/share/direnv~, ~.local/state/bash~ |
-| storage-station | ~/var/lib/{samba,target,containers,private}~; homes, app state and the edge server's root are ZFS datasets      |
+| cluster node    | ~/var/lib/{rancher,kubelet,iscsi}~; ~/etc/rancher~, ~/etc/cni~ and ~/etc/iscsi/*~ link into them              |
+| workstation     | artur's ~Documents~, ~Downloads~, ~.ssh~, ~.config/mozilla~, ~.local/share/direnv~, ~.local/state/bash~       |
+| storage-station | ~/var/lib/{samba,target,containers,private}~; homes, app state and the edge server's root are ZFS datasets    |
 
 + ~disk~: the disk layout of the VMs, an ESP and a btrfs with ~nix~ and ~persist~ subvolumes.
 

@@ -1,15 +1,12 @@
 # storage-station's services: SMB shares, the media apps, the edge cluster's server container, the dashboard.
-# The machine itself (board, boot, pools, network, users) is in flake.nix.
 {
   config,
   lib,
-  pkgs,
   ...
 }: {
   services.samba = {
     enable = true;
     openFirewall = true;
-    # A standalone server: no domain to join
     winbindd.enable = false;
     settings = {
       global = {
@@ -22,6 +19,8 @@
         "fruit:metadata" = "stream";
         "fruit:model" = "MacSamba";
         "fruit:nfs_aces" = "no";
+        # Unknown users and anonymous logins become the guest account, for the media share
+        "map to guest" = "Bad User";
       };
       "3d-models" = {
         "path" = "/srv/3d-models";
@@ -30,6 +29,11 @@
         "force group" = "designers";
         "create mask" = "0770";
         "directory mask" = "0770";
+      };
+      "media" = {
+        "path" = "/srv/media/media";
+        "read only" = "yes";
+        "guest ok" = "yes";
       };
       "time-machine" = {
         "path" = "/srv/time-machine";
@@ -83,6 +87,7 @@
   # the empty directories on the tmpfs root
   systemd.services.samba-smbd.unitConfig.RequiresMountsFor = [
     "/srv/3d-models"
+    "/srv/media"
     "/srv/time-machine"
   ];
   systemd.services.radarr.unitConfig.RequiresMountsFor = ["/srv/media"];
@@ -147,7 +152,7 @@
     # Sonarr stays a container until nixpkgs ships Sonarr 5 (its database is on the v5 schema). On the host's
     # network, so it talks to the other apps on localhost like they do.
     sonarr = {
-      image = "ghcr.io/home-operations/sonarr:5.0.0.2569@sha256:b699df6b4b10e71ce23fb6fd8944653171f49164f79020cb0ea09e46b51b0517";
+      image = "ghcr.io/home-operations/sonarr:5.0.0.2785@sha256:825bf13276077b2fa57dd1c0a67d10b2e71891b7391d19636615ede8ddc0a4a5";
       user = "568:568";
       volumes = [
         "/var/lib/sonarr:/config"
