@@ -38,8 +38,11 @@
       enable = true;
       defaults.autodetected = "-a -o on -s (S/../.././02|L/../15/./04)";
     };
+    # Each dataset gets its own minute of the hour (UTC) for its snapshots and their pruning, and sanoid runs only
+    # at those minutes: taken all at once, the snapshots of every zvol and dataset hold up ZFS and the iSCSI disks
     services.sanoid = {
       enable = true;
+      interval = "*-*-* *:05,13,21,29,37,45,53:00";
       templates = {
         production = {
           hourly = 24;
@@ -56,30 +59,62 @@
         "tank/kubernetes" = {
           useTemplate = ["production"];
           recursive = true;
+          hourly_min = 5;
+          daily_hour = 1;
+          daily_min = 5;
+          monthly_hour = 1;
+          monthly_min = 5;
         };
         "tank/kubernetes-edge" = {
           useTemplate = ["production"];
           recursive = true;
+          hourly_min = 13;
+          daily_hour = 1;
+          daily_min = 13;
+          monthly_hour = 1;
+          monthly_min = 13;
         };
         "tank/home" = {
           useTemplate = ["production"];
           recursive = true;
+          hourly_min = 21;
+          daily_hour = 1;
+          daily_min = 21;
+          monthly_hour = 1;
+          monthly_min = 21;
         };
         "tank/apps" = {
           useTemplate = ["production"];
           recursive = true;
+          hourly_min = 29;
+          daily_hour = 1;
+          daily_min = 29;
+          monthly_hour = 1;
+          monthly_min = 29;
         };
         "dozer/data" = {
           useTemplate = ["production"];
           recursive = true;
+          hourly_min = 37;
+          daily_hour = 1;
+          daily_min = 37;
+          monthly_hour = 1;
+          monthly_min = 37;
         };
         "dozer/backups" = {
           useTemplate = ["production"];
           recursive = true;
+          hourly_min = 45;
+          daily_hour = 1;
+          daily_min = 45;
+          monthly_hour = 1;
+          monthly_min = 45;
         };
         "dozer/media" = {
           useTemplate = ["media"];
           recursive = true;
+          daily_hour = 1;
+          daily_min = 53;
         };
       };
     };

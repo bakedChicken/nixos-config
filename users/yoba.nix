@@ -31,7 +31,18 @@
         btop
         m1ddc
         picocom
-        rectangle
+        (stdenvNoCC.mkDerivation {
+          pname = "rectangle";
+          version = "2.0.4";
+          src = fetchurl {
+            url = "https://github.com/rxhanson/Rectangle/releases/download/v2.0.4/Rectangle2.0.4.zip";
+            hash = "sha256-C5uLEe3rMjfjIkxhmm9r+15ZlqR3BIvm/0uYsDRq7ck=";
+          };
+          nativeBuildInputs = [unzip];
+          sourceRoot = ".";
+          installPhase = "mkdir -p $out/Applications && cp -R Rectangle.app $out/Applications/";
+          dontFixup = true;
+        })
       ];
     };
   };
