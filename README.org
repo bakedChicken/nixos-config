@@ -11,26 +11,29 @@
 
 * What this is
 
-One flake for every machine I run: a storage server, two Kubernetes (k3s) clusters (see [[file:kubernetes/README.org][kubernetes/README.org]]) and two development machines. Nix is used as a configuration language only: no loops, conditions or custom functions in machine definitions.
+One flake for every machine I run: a storage server, two Kubernetes (k3s) clusters (see [[file:kubernetes/README.org][kubernetes/README.org]]), a development machine and the Mac. Nix is used as a configuration language only: no loops, conditions or custom functions in machine definitions.
 
-| File                              | Holds                                                                                                                                     |
-|-----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------|
-| ~flake.nix~                       | inputs, the shared modules, and every machine: the development machines, storage-station's hardware and OS, both clusters and their nodes |
-| ~storage-station.nix~             | storage-station's services: SMB, media apps, reverse proxy, the edge server's container host, dashboard                                   |
-| ~workstation/~                    | the development machines' desktop and artur's home-manager configuration                                                                  |
-| ~kubernetes/~                     | what every cluster node runs, the cluster add-ons, and the platform Argo CD syncs                                                         |
-| ~secrets/~, ~kubernetes/secrets/~ | agenix secrets; ~rekeyed/~ holds them encrypted per machine                                                                               |
+Every machine is a row of four columns: its hardware, its OS, its roles and its users. Each column is a folder, one module per file; ~desktop-umbriel~ and ~hyperv-gpu-pv~ are kept but used by no machine.
+
+| Folder                            | Holds                                                                                                             |
+|-----------------------------------+-------------------------------------------------------------------------------------------------------------------|
+| ~hardware/~                       | what a machine is: boards, boot, NICs, kernel modules; ~disko.nix~ holds the disk layouts (~diskoConfigurations~) |
+| ~os/~                             | the operating system every machine runs: ~common~ (NixOS and the Mac), ~base~, ~ephemeral~, ~darwin~              |
+| ~roles/~                          | what a machine does: ~workstation~, ~desktop-kde~, ~desktop-umbriel~, ~nas~, ~builder~                            |
+| ~users/~                          | who uses it: accounts and home-manager configuration (~artur~, ~tatyana~, ~yoba~ on the Mac)                      |
+| ~kubernetes/~                     | the ~kubernetes-node~ and ~storage-server~ roles, the cluster add-ons, and the platform Argo CD syncs             |
+| ~flake.nix~                       | inputs, and one row per machine choosing from each folder; the clusters and their nodes                           |
+| ~kubernetes/secrets/~             | agenix secrets; ~rekeyed/~ holds them encrypted per machine                                                       |
 
 * Machines
 
-| Machine                                    | Hardware                                               | Modules                                                                |
-|--------------------------------------------+--------------------------------------------------------+------------------------------------------------------------------------|
-| ~storage-station~                          | AMD Ryzen Embedded V1500B, ZFS pools                   | ~base~, ~ephemeral~, ~storage-server~                                  |
-| ~k8s-node-1~ … ~k8s-node-3~                | Hyper-V VMs                                            | ~base~, ~ephemeral~, ~disk~, ~hyperv-vm~, ~kubernetes-node~            |
-| ~k8s-node-x86-64-1~                        | NixOS container ~edge-server~ on storage-station       | ~base~, ~kubernetes-node~                                              |
-| ~k8s-node-aarch64-1~, ~k8s-node-aarch64-2~ | Raspberry Pi 3B, SD image of ~nixos-raspberry-pi-uefi~ | ~base~, ~raspberry-pi-3~, ~kubernetes-node~ (mutable btrfs root)       |
-| ~nixos-development-environment~            | Hyper-V VM                                             | ~base~, ~ephemeral~, ~disk~, ~hyperv-vm~, ~workstation~, ~desktop-kde~ |
-| ~nixos-development-environment-aarch64~    | UTM VM on the Mac                                      | ~base~, ~ephemeral~, ~disk~, ~workstation~, ~desktop-umbriel~          |
+| Machine                                    | hardware                                                              | os                  | roles                                                               | users                        |
+|--------------------------------------------+-----------------------------------------------------------------------+---------------------+---------------------------------------------------------------------+------------------------------|
+| ~storage-station~                          | ~storage-station-hardware~                                            | ~base~, ~ephemeral~ | ~nas~, ~storage-server~, ~builder~, ~kubernetes-node~ (edge server) | ~artur~, ~tatyana~           |
+| ~k8s-node-1~ … ~k8s-node-3~                | Hyper-V VM: ~hyperv-vm~, disko ~vm~                                   | ~base~, ~ephemeral~ | ~kubernetes-node~                                                   | ~artur~                      |
+| ~k8s-node-aarch64-1~, ~k8s-node-aarch64-2~ | Raspberry Pi 3B: ~raspberry-pi-3~ (mutable btrfs root on the SD card) | ~base~              | ~kubernetes-node~                                                   | ~artur~                      |
+| ~nixos-development-environment~            | Hyper-V VM: ~hyperv-vm~, disko ~vm~                                   | ~base~, ~ephemeral~ | ~workstation~, ~desktop-kde~                                        | ~artur~, ~artur-workstation~ |
+| ~yoba-book-pro~ (nix-darwin)               | MacBook Pro, Apple M3 Max                                             | ~darwin~            | ~workstation~, ~builder~                                            | ~yoba~                       |
 
 * How it fits together
 
@@ -40,10 +43,10 @@ One flake for every machine I run: a storage server, two Kubernetes (k3s) cluste
              ┌──── br0 (VLAN 30) ───┴──┐            ┌──── VLAN 33 ────────────────┐
              │                         │            │                             │
   dev machines, Mac          storage-station ─── br33 ──┬── k8s-node-1..3 (Hyper-V)
-                             │  ZFS: tank, dozer        ├── k8s-node-x86-64-1 (container edge-server, on storage-station)
+                             │  ZFS: tank, dozer        │
                              │  SMB, Time Machine       └── k8s-node-aarch64-1..2 (2.5G ports of storage-station)
-                             │  media apps behind nginx
-                             │  qBittorrent container on br0
+                             │  edge k3s server: media apps, Traefik Gateway (*.internal.edge.burned.host)
+                             │  qBittorrent pod with its own address on br0 (Multus)
                              └  iSCSI target (br33 only)
 #+end_example
 
@@ -56,21 +59,32 @@ One flake for every machine I run: a storage server, two Kubernetes (k3s) cluste
 
 * How a machine is built
 
-+ ~base~: Nix, agenix, the latest kernel, NetworkManager, avahi for ~.local~ names, resolved for unicast DNS, SSH, the ~artur~ user. Addresses come only from DHCP reservations (by MAC) and SLAAC (EUI-64), so they stay the same across reinstalls.
++ ~common~ (also on the Mac): the Nix daemon's settings and the time zone.
++ ~base~: ~common~, agenix, disko, the latest kernel, NetworkManager, avahi for ~.local~ names, resolved for unicast DNS, SSH. Addresses come only from DHCP reservations (by MAC) and SLAAC (EUI-64), so they stay the same across reinstalls.
 + ~ephemeral~: ~/~ is a tmpfs and ~/etc~ a read-only overlay; users exist only as declared. What survives a reboot is on ~/persist~:
 
-| Machine role    | Persisted                                                                                                     |
-|-----------------+---------------------------------------------------------------------------------------------------------------|
-| every machine   | ~/var/lib/{nixos,systemd,NetworkManager}~, ~/var/log~, SSH host keys (the agenix identity), ~/etc/machine-id~ |
-| cluster node    | ~/var/lib/{rancher,kubelet,iscsi}~; ~/etc/rancher~, ~/etc/cni~ and ~/etc/iscsi/*~ link into them              |
-| workstation     | artur's ~Documents~, ~Downloads~, ~.ssh~, ~.config/mozilla~, ~.local/share/direnv~, ~.local/state/bash~       |
-| storage-station | ~/var/lib/{samba,target,containers,private}~; homes, app state and the edge server's root are ZFS datasets    |
+| Module            | Persisted                                                                                                     |
+|-------------------+---------------------------------------------------------------------------------------------------------------|
+| every machine     | ~/var/lib/{nixos,systemd,NetworkManager}~, ~/var/log~, SSH host keys (the agenix identity), ~/etc/machine-id~ |
+| kubernetes-node   | ~/var/lib/{rancher,kubelet,iscsi}~; ~/etc/rancher~, ~/etc/cni~ and ~/etc/iscsi/*~ link into them              |
+| artur-workstation | artur's ~Documents~, ~Downloads~, ~.ssh~, ~.config/mozilla~, ~.local/share/direnv~, ~.local/state/bash~       |
+| nas               | ~/var/lib/{samba,target,containers,private}~; homes and app state are ZFS datasets                            |
 
-+ ~disk~: the disk layout of the VMs, an ESP and a btrfs with ~nix~ and ~persist~ subvolumes.
++ disko ~vm~ (~diskoConfigurations.vm~): the VMs' disk, an ESP and a btrfs with ~nix~ and ~persist~ subvolumes.
++ ~workstation~: home-manager, unfree packages and the font on the development machine and the Mac; on the Mac also Homebrew's apps and the Dock.
++ ~builder~: storage-station builds at idle priority; the Mac builds aarch64-linux in nix-darwin's ~linux-builder~ VM and sends x86_64-linux builds to storage-station.
++ ~artur~: the account on every NixOS machine; ~artur-workstation~ adds the persisted home, the desktop groups, the registry token and the Linux-only home configuration (Emacs on Wayland, Firefox, Alacritty). ~homeModules.artur~ is the home configuration on the development machine and, as ~yoba~, on the Mac, where bash from Nix is the login shell and the Mac keeps its own CLI tools.
 
 * Common actions
 
 Run from a checkout on a development machine (or on storage-station, for storage-station), inside ~nix develop~.
+
+Rebuild the Mac (the first time, before ~darwin-rebuild~ exists: ~sudo nix run nix-darwin -- switch --flake .#yoba-book-pro~):
+#+begin_src bash
+sudo darwin-rebuild switch --flake .#yoba-book-pro
+#+end_src
+
+The Mac builds aarch64-linux in nix-darwin's ~linux-builder~ VM and x86_64-linux on storage-station, so it deploys every machine as the development machine does.
 
 Deploy a server or cluster node:
 #+begin_src bash
@@ -88,16 +102,16 @@ mkdir -p keep/persist && ssh <machine>.local 'sudo tar -C / -c etc/machine-id et
 nix run github:nix-community/nixos-anywhere -- --flake .#<machine> --target-host root@<host> --extra-files keep --chown /persist/etc root:root
 #+end_src
 
-Flash a Raspberry Pi: build its image on an aarch64 machine, write the machine's host keys and machine ID into its root, and ~dd~ it to the SD card; it grows to the card on first boot.
+Flash a Raspberry Pi: build its image on the Mac (its ~linux-builder~), write the machine's host keys and machine ID into its root, and ~dd~ it to the SD card; it grows to the card on first boot.
 #+begin_src bash
 nix build .#nixosConfigurations.k8s-node-aarch64-1.config.system.build.raspberryPiImage
 #+end_src
 
 Replace a k3s server: drain it, ~kubectl delete node <machine>~, install it as above; it joins the cluster's ~init~ server as a new etcd member.
 
-Add or change a secret, then encrypt it for the machines that use it:
+Add or change a secret, then encrypt it for the machines that use it. Only the Mac can: the secrets are encrypted to its SSH key (~/Users/yoba/.ssh/id_ed25519~), the one master identity:
 #+begin_src bash
-agenix edit secrets/<name>.age
+agenix edit kubernetes/secrets/<name>.age
 agenix rekey
 #+end_src
 

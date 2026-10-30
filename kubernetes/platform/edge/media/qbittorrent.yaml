@@ -1,0 +1,134 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: br0
+  namespace: media
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "type": "macvlan",
+      "master": "br0",
+      "mode": "bridge",
+      "capabilities": {"mac": true},
+      "ipam": {"type": "dhcp"}
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: qbittorrent
+  template:
+    metadata:
+      labels:
+        app: qbittorrent
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [{"name": "br0", "namespace": "media", "mac": "f2:9e:b8:77:27:db", "default-route": ["172.16.30.1"]}]
+    spec:
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      dnsPolicy: None
+      dnsConfig:
+        nameservers: ["172.16.30.1"]
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        runAsNonRoot: true
+        sysctls:
+          - name: net.ipv6.conf.all.disable_ipv6
+            value: "1"
+      initContainers:
+        - name: route-through-br0
+          image: ghcr.io/home-operations/qbittorrent:5.2.3@sha256:4fcf15b7f265c2c8d7bc2a7e13240a07e0593c326f3cf3b5b9bb69eec5b79299
+          command: ["ip", "route", "del", "default", "dev", "eth0"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            capabilities:
+              add: [NET_ADMIN]
+      containers:
+        - name: qbittorrent
+          image: ghcr.io/home-operations/qbittorrent:5.2.3@sha256:4fcf15b7f265c2c8d7bc2a7e13240a07e0593c326f3cf3b5b9bb69eec5b79299
+          command:
+            - /usr/bin/catatonit
+            - --
+            - sh
+            - -c
+            - umask 0002 && exec /app/qbittorrent-nox --profile=/config --webui-port=8080 --torrenting-port=51413
+          env:
+            - name: TZ
+              value: "Europe/Vienna"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media
+              mountPath: /srv/media
+      volumes:
+        - name: config
+          hostPath:
+            path: /srv/apps/qbittorrent
+            type: Directory
+        - name: media
+          hostPath:
+            path: /srv/media
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  selector:
+    app: qbittorrent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  podSelector:
+    matchLabels:
+      app: qbittorrent
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - qbittorrent.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: qbittorrent
+          port: 8080

@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: profile
+  namespace: browser
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chromium
+  namespace: browser
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: chromium
+  template:
+    metadata:
+      labels:
+        app: chromium
+    spec:
+      hostname: chromium
+      terminationGracePeriodSeconds: 5
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+      containers:
+        - name: chromium
+          image: docker.io/library/browser:nix
+          imagePullPolicy: Never
+          command:
+            - cage
+            - --
+            - chromium
+            - --no-sandbox
+            - --ozone-platform=wayland
+            - --user-data-dir=/profile
+            - --remote-debugging-port=9222
+            - --no-first-run
+            - --disable-dev-shm-usage
+          env:
+            - name: HOME
+              value: /profile
+            - name: XDG_RUNTIME_DIR
+              value: /run/wayland
+            - name: WLR_BACKENDS
+              value: headless
+            - name: WLR_RENDERER
+              value: pixman
+            - name: WLR_LIBINPUT_NO_DEVICES
+              value: "1"
+            - name: TZ
+              value: "Europe/Vienna"
+          volumeMounts:
+            - name: profile
+              mountPath: /profile
+            - name: wayland
+              mountPath: /run/wayland
+            - name: tmp
+              mountPath: /tmp
+        - name: wayvnc
+          image: docker.io/library/browser:nix
+          imagePullPolicy: Never
+          command: [wayvnc, --render-cursor, 127.0.0.1, "5900"]
+          env:
+            - name: XDG_RUNTIME_DIR
+              value: /run/wayland
+            - name: WAYLAND_DISPLAY
+              value: wayland-0
+          volumeMounts:
+            - name: wayland
+              mountPath: /run/wayland
+        - name: novnc
+          image: docker.io/library/browser:nix
+          imagePullPolicy: Never
+          command:
+            [websockify, --web, /share/webapps/novnc, "6080", "127.0.0.1:5900"]
+          ports:
+            - name: http
+              containerPort: 6080
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+        - name: cdp
+          image: docker.io/library/browser:nix
+          imagePullPolicy: Never
+          command:
+            [socat, "TCP-LISTEN:9223,fork,reuseaddr", "TCP:127.0.0.1:9222"]
+          ports:
+            - name: cdp
+              containerPort: 9223
+      volumes:
+        - name: profile
+          persistentVolumeClaim:
+            claimName: profile
+        - name: wayland
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chromium
+  namespace: browser
+spec:
+  selector:
+    app: chromium
+  ports:
+    - name: http
+      port: 6080
+      targetPort: 6080
+    - name: cdp
+      port: 9222
+      targetPort: 9223
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: cdp
+  namespace: browser
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: cdp
+  rules:
+    - backendRefs:
+        - name: chromium
+          port: 9222
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: novnc
+  namespace: browser
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - browser.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: chromium
+          port: 6080

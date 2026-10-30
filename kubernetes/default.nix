@@ -1,5 +1,3 @@
-# The clusters: their options, what every node runs, and the generated nixosConfigurations and deploy targets. The
-# clusters themselves are defined in flake.nix, the add-ons in addons.nix.
 {
   self,
   inputs,
@@ -16,7 +14,6 @@ in {
     ./addons.nix
   ];
 
-  # deploy-rs nodes come from here and from flake.nix, so they have to merge
   options.flake = flake-parts-lib.mkSubmoduleOptions {
     deploy.nodes = mkOption {
       type = types.lazyAttrsOf types.raw;
@@ -115,8 +112,6 @@ in {
   };
 
   config.flake = {
-    # k3s with what both clusters need: open-iscsi and democratic-csi against storage-station, the Gateway API and
-    # volume snapshot CRDs, the ghcr.io pull credentials
     nixosModules.kubernetes-node = {
       config,
       lib,
@@ -179,8 +174,6 @@ in {
         boot.kernel.sysctl."net.ipv4.conf.lxc*.rp_filter" = 0;
 
         networking = {
-          usePredictableInterfaceNames = false;
-          # The CNI's interfaces are outside NetworkManager's connection settings
           tempAddresses = "disabled";
           networkmanager.unmanaged = [
             "interface-name:lxc*"
@@ -213,8 +206,6 @@ in {
             ];
           };
         };
-
-        services.avahi.allowInterfaces = ["eth0"];
 
         environment.variables = {
           KUBECONFIG = "/etc/rancher/k3s/k3s.yaml";
@@ -249,6 +240,7 @@ in {
           description = "Render k3s registries.yaml with the ghcr.io token";
           wantedBy = ["k3s.service"];
           before = ["k3s.service"];
+          after = ["agenix-install-secrets.service"];
           restartTriggers = [config.age.secrets.ghcr-token.file];
           serviceConfig = {
             Type = "oneshot";
@@ -267,8 +259,10 @@ in {
           };
         };
 
+        systemd.services.k3s.after = ["agenix-install-secrets.service"];
         systemd.services.k3s.restartTriggers =
           [config.age.secrets.ghcr-token.file]
+          ++ config.services.k3s.images
           ++ lib.optional isServer config.age.secrets.democratic-csi-config.file;
 
         services.k3s = {
@@ -277,11 +271,7 @@ in {
           tokenFile = config.age.secrets.join-token.path;
           clusterInit = isInit && lib.length (lib.filter (node: node.role == "server") (lib.attrValues cluster.nodes)) > 1;
           serverAddr = lib.mkIf (!isInit) "https://${cluster.init}.local:6443";
-          disable = lib.mkIf isServer [
-            "traefik"
-            "servicelb"
-            "local-storage"
-          ];
+          disable = lib.mkIf isServer ["local-storage"];
           extraFlags = lib.mkMerge [
             ["--private-registry /run/ghcr-registries/registries.yaml"]
             (lib.mkIf isServer [
@@ -318,9 +308,6 @@ in {
             })
           ];
 
-          # Volumes are zvols under the cluster's dataset on storage-station, exported over iSCSI; democratic-csi
-          # logs in there as the csi user over SSH. Names stay <namespace>-<pvc>, so a reinstalled cluster re-adopts
-          # them. Never declare a claim smaller than its zvol: the driver would shrink it.
           autoDeployCharts.democratic-csi = lib.mkIf isServer {
             repo = "https://democratic-csi.github.io/charts/";
             name = "democratic-csi";
@@ -336,7 +323,6 @@ in {
                 existingConfigSecret = "democratic-csi-driver-config";
                 config.driver = "zfs-generic-iscsi";
               };
-              # The chart defaults to "latest"
               controller.driver.image.tag = "latest@sha256:944d0e65077efbd9c1fdf23997eec8fac4b4bfb7c3de400f63e33a0a849c5ced";
               node.driver.image.tag = "latest@sha256:944d0e65077efbd9c1fdf23997eec8fac4b4bfb7c3de400f63e33a0a849c5ced";
               storageClasses = [
@@ -370,6 +356,7 @@ in {
               [
                 self.nixosModules.base
                 self.nixosModules.kubernetes-node
+                self.nixosModules.artur
                 {
                   networking.hostName = nodeName;
                   nixpkgs.hostPlatform = system;

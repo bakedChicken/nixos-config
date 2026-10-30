@@ -1,0 +1,81 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: media-edge
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://edge.burned.host:6443
+    namespace: media
+  source:
+    repoURL: oci://ghcr.io/bakedchicken/platform
+    targetRevision: latest
+    path: edge/media
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: media-edge
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "21"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: media-edge
+      images:
+        - alias: radarr
+          imageName: ghcr.io/home-operations/radarr
+          commonUpdateSettings:
+            updateStrategy: newest-build
+            allowTags: regexp:^6\.\d+\.\d+\.\d+$
+        - alias: sonarr
+          imageName: ghcr.io/home-operations/sonarr
+          commonUpdateSettings:
+            updateStrategy: newest-build
+            allowTags: regexp:^5\.\d+\.\d+\.\d+$
+        - alias: prowlarr
+          imageName: ghcr.io/home-operations/prowlarr
+          commonUpdateSettings:
+            updateStrategy: newest-build
+            allowTags: regexp:^2\.\d+\.\d+\.\d+$
+        - alias: plex
+          imageName: ghcr.io/home-operations/plex
+          commonUpdateSettings:
+            updateStrategy: newest-build
+            allowTags: regexp:^1\.\d+\.\d+\.\d+$
+        - alias: flaresolverr
+          imageName: ghcr.io/flaresolverr/flaresolverr
+          commonUpdateSettings:
+            updateStrategy: semver
+            allowTags: regexp:^v3\.\d+\.\d+$
+        - alias: qbittorrent
+          imageName: ghcr.io/home-operations/qbittorrent
+          commonUpdateSettings:
+            updateStrategy: semver
+            allowTags: regexp:^5\.\d+\.\d+$
+        - alias: lintel
+          imageName: ghcr.io/bakedchicken/lintel:latest
+          commonUpdateSettings:
+            updateStrategy: digest

@@ -39,8 +39,6 @@ in {
   };
 
   flake.nixosModules = {
-    # storage-station's side of the clusters' storage: the LIO iSCSI target and the csi user democratic-csi logs
-    # in as, allowed to manage each cluster's dataset and nothing else
     storage-server = {
       config,
       lib,
@@ -53,7 +51,6 @@ in {
         "iscsi_target_mod"
       ];
       environment.systemPackages = [pkgs.targetcli-fb];
-      # targetcli saves the target configuration to /etc/target; /etc is read-only, so that points into /var/lib
       environment.etc."target".source = "/var/lib/target";
 
       systemd.services.iscsi-target = {
@@ -99,7 +96,6 @@ in {
         };
       };
 
-      # The private key is in each cluster's democratic-csi driver config
       users.users.csi = {
         isSystemUser = true;
         group = "csi";
@@ -130,6 +126,10 @@ in {
       cluster = config.kubernetes.cluster;
     in {
       services.k3s = lib.mkIf (config.kubernetes.role == "server") {
+        disable = [
+          "traefik"
+          "servicelb"
+        ];
         extraFlags = [
           "--flannel-backend=none"
           "--disable-network-policy"
@@ -152,7 +152,6 @@ in {
             spec.bootstrap = true;
           };
           values = {
-            # k3s's local API load balancer, present on every node: no node address needed
             k8sServiceHost = "127.0.0.1";
             k8sServicePort = "6444";
             ipv4.enabled = lib.elem "ipv4" cluster.families;
@@ -171,7 +170,6 @@ in {
             kubeProxyReplacement = true;
             cni.exclusive = false;
             hubble.relay.enabled = true;
-            # No L7 proxy of Cilium's own: the gateway and the mesh are Istio's
             l7Proxy = false;
             envoy.enabled = false;
             hubble.ui.enabled = true;
@@ -563,6 +561,26 @@ in {
 
       services.k3s.manifests = lib.mkIf isServer {
         mktxp-credentials.source = config.age.secrets.mktxp-credentials.path;
+      };
+    };
+
+    cloudflare-token = {
+      config,
+      lib,
+      ...
+    }: let
+      isServer = config.kubernetes.role == "server";
+    in {
+      age.secrets = lib.mkIf isServer {
+        cloudflare-api-token.rekeyFile = ./secrets/cloudflare-api-token.age;
+      };
+
+      systemd.services.k3s.restartTriggers = lib.mkIf isServer [
+        config.age.secrets.cloudflare-api-token.file
+      ];
+
+      services.k3s.manifests = lib.mkIf isServer {
+        cloudflare-api-token.source = config.age.secrets.cloudflare-api-token.path;
       };
     };
   };

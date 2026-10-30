@@ -11,10 +11,10 @@
 
 * Clusters
 
-| Cluster | Nodes                                                                                     | CNI     | NixOS add-ons                     | From ~main~'s Argo CD             |
-|---------+-------------------------------------------------------------------------------------------+---------+-----------------------------------+-----------------------------------|
-| ~main~  | ~k8s-node-1~ … ~k8s-node-3~, all servers                                                  | Cilium  | kube-vip, OpenBao, Argo CD        | the whole platform, Reloader      |
-| ~edge~  | ~k8s-node-x86-64-1~ (server, SQLite), ~k8s-node-aarch64-1~, ~k8s-node-aarch64-2~ (agents) | flannel | ~argocd-spoke~, mktxp credentials | Reloader, monitoring agent, mktxp |
+| Cluster | Nodes                                                         | CNI     | NixOS add-ons                                       | From ~main~'s Argo CD                                                                                             |
+|---------+---------------------------------------------------------------+---------+-----------------------------------------------------+-------------------------------------------------------------------------------------------------------------------|
+| ~main~  | ~k8s-node-1~ … ~k8s-node-3~, all servers                      | Cilium  | kube-vip, OpenBao, Argo CD                          | the whole platform, Reloader                                                                                      |
+| ~edge~  | ~storage-station~, ~k8s-node-aarch64-1~, ~k8s-node-aarch64-2~ | flannel | ~argocd-spoke~, mktxp credentials, Cloudflare token | Reloader, monitoring agent, mktxp, cert-manager, Traefik (Gateway), Multus, the media apps, the browser (~edge/~) |
 
 Every node also gets the Gateway API and volume snapshot CRDs and democratic-csi (~zfs-generic-iscsi~ against storage-station, storage class ~iscsi~, snapshot class ~iscsi-snapshot~). Each cluster keeps its volumes in its own dataset (~tank/kubernetes~, ~tank/kubernetes-edge~). Both run dual-stack.
 
@@ -32,14 +32,14 @@ A cluster managed by ~main~'s Argo CD (a spoke) needs:
 
 The nodes live on VLAN 33, which carries only the clusters; addresses are DHCP reservations and EUI-64 SLAAC. IPv6 is ULA-only (~fd71:895d:e328:33::/64~), masqueraded to the GUA by the router; NAT64 (~64:ff9b::/96~) serves IPv4-only destinations.
 
-| Node               |         IPv4 | IPv6                                 |
-|--------------------+--------------+--------------------------------------|
-| k8s-node-1         | 172.16.33.11 | fd71:895d:e328:33:215:5dff:fe34:a44c |
-| k8s-node-2         | 172.16.33.12 | fd71:895d:e328:33:215:5dff:fe34:a44d |
-| k8s-node-3         | 172.16.33.13 | fd71:895d:e328:33:215:5dff:fe34:a44f |
-| k8s-node-x86-64-1  | 172.16.33.21 | fd71:895d:e328:33:2a0:98ff:fe5c:92f6 |
-| k8s-node-aarch64-1 | 172.16.33.22 | EUI-64 of its MAC                    |
-| k8s-node-aarch64-2 | 172.16.33.23 | EUI-64 of its MAC                    |
+| Node               | IPv4                   | IPv6                                 |
+|--------------------+------------------------+--------------------------------------|
+| k8s-node-1         | 172.16.33.11           | fd71:895d:e328:33:215:5dff:fe34:a44c |
+| k8s-node-2         | 172.16.33.12           | fd71:895d:e328:33:215:5dff:fe34:a44d |
+| k8s-node-3         | 172.16.33.13           | fd71:895d:e328:33:215:5dff:fe34:a44f |
+| storage-station    | br33: DHCP reservation | br33: EUI-64                         |
+| k8s-node-aarch64-1 | 172.16.33.22           | EUI-64 of its MAC                    |
+| k8s-node-aarch64-2 | 172.16.33.23           | EUI-64 of its MAC                    |
 
 ~main~'s control-plane VIP and LoadBalancer address is ~172.16.33.200~. Apps are ~<app>.burned.host~ when public and ~<app>.internal.k8s.burned.host~ when only for the home network and VPN.
 
@@ -52,15 +52,17 @@ The nodes live on VLAN 33, which carries only the clusters; addresses are DHCP r
 
 NixOS holds what has to exist before Argo CD runs: k3s, the CNI, kube-vip, democratic-csi, OpenBao, Argo CD and the secrets they need. ~push-platform~ pushes ~platform/~ from the working tree to ghcr.io as ~platform:latest~, annotated with the commit and whether the tree was dirty; Argo CD picks it up within minutes. The cluster runs whatever was pushed last, so push before reinstalling.
 
+The media apps' images (~edge/media/~) are kept current by Argo CD Image Updater: each follows its newest release within the major version it is pinned to (the ~ImageUpdater~ in ~platform/edge/media.yaml~), written as image overrides on the ~media-edge~ Application, not into the files. The pins in the files are where an app starts; a new major version needs its pin raised there.
+
 The root Application (~infra/argocd-bootstrap.yaml~) syncs the top-level files: ~platform/addons.yaml~ (one ApplicationSet per add-on that runs on several clusters) and ~platform/groups.yaml~ (one Application per group of ~main~'s platform). Groups sync side by side and retry until what they need from another group exists; sync waves order the inside of a group.
 
-| Group            | What (sync waves)                                                                                                                                                                                                     |
-|------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ~foundation/~    | cert-manager (0); Istio ambient (1-3); ambient-repair, which evicts pods left out of the mesh after a reboot (5); vault-config-operator, External Secrets (10); OpenBao contents, ~ClusterSecretStore~ (20); certificates, issuers, ~burned-gateway~ (29-32); Keycloak login for OpenBao (59-60) |
-| ~data/~          | CloudNativePG operator (0); Barman Cloud plugin (10); RustFS and its ~rustfs-users~ Job (33-35); ~default-postgres-cluster~ and its backups to RustFS (39-40)                                                         |
-| ~identity/~      | Keycloak operator (0); database, Keycloak at ~auth.burned.host~, ~burned~ realm (50-52); clients added by the ~keycloak-config~ Job (53-54)                                                                           |
-| ~observability/~ | alerting rules, Loki, Tempo, Pyroscope, Grafana, Alloy, OpenTelemetry Operator, VictoriaMetrics (69-72); ~Instrumentation~ (80); Kiali (95-96)                                                                        |
-| ~apps/~          | Nextcloud at ~nextcloud.burned.host~ (94); Beer Tree's namespace, database, bucket and secrets (94) and its ~beer-tree-deploy~ Application (95); Cloudflare tunnel, Lintel at ~lintel.internal.k8s.burned.host~ (95)                                                                                                                                                     |
+| Group            | What (sync waves)                                                                                                                                                                                                                                                                                |
+|------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ~foundation/~    | cert-manager (0); Istio ambient (1-3); ambient-repair, which evicts pods left out of the mesh after a reboot (5); vault-config-operator, External Secrets, Argo CD Image Updater (10); OpenBao contents, ~ClusterSecretStore~ (20); certificates, issuers, ~burned-gateway~ (29-32); Keycloak login for OpenBao (59-60) |
+| ~data/~          | CloudNativePG operator (0); Barman Cloud plugin (10); RustFS and its ~rustfs-users~ Job (33-35); ~default-postgres-cluster~ and its backups to RustFS (39-40)                                                                                                                                    |
+| ~identity/~      | Keycloak operator (0); database, Keycloak at ~auth.burned.host~, ~burned~ realm (50-52); clients added by the ~keycloak-config~ Job (53-54)                                                                                                                                                      |
+| ~observability/~ | alerting rules, Loki, Tempo, Pyroscope, Grafana, Alloy, OpenTelemetry Operator, VictoriaMetrics (69-72); ~Instrumentation~ (80); Kiali (95-96)                                                                                                                                                   |
+| ~apps/~          | Nextcloud at ~nextcloud.burned.host~ (94); Beer Tree's namespace, database, bucket and secrets (94) and its ~beer-tree-deploy~ Application (95); Cloudflare tunnel, Lintel at ~lintel.internal.k8s.burned.host~ (95)                                                                             |
 
 An app gets its namespace, a database in the shared cluster (a ~Database~ and ~DatabaseRole~ in ~postgres~, as in ~platform/identity/keycloak.yaml~), a RustFS bucket and user (a ~RandomSecret~ in ~platform/foundation/openbao.yaml~, a line in the ~rustfs-users~ Job and its secret in ~platform/data/rustfs.yaml~, an ~ExternalSecret~ in its namespace).
 

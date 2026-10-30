@@ -1,0 +1,418 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: radarr
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        runAsNonRoot: true
+        supplementalGroups: [568]
+      containers:
+        - name: radarr
+          image: ghcr.io/home-operations/radarr:6.4.4.10685@sha256:1902ad2c08e9bac276ff9a1429af2eaa2f3c635a51f138f1b3eb734995171537
+          env:
+            - name: TZ
+              value: "Europe/Vienna"
+            - name: UMASK
+              value: "002"
+            - name: RADARR__APP__INSTANCENAME
+              value: "Radarr"
+          ports:
+            - name: http
+              containerPort: 7878
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 7878
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media
+              mountPath: /srv/media
+      volumes:
+        - name: config
+          hostPath:
+            path: /srv/apps/radarr
+            type: Directory
+        - name: media
+          hostPath:
+            path: /srv/media
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  selector:
+    app: radarr
+  ports:
+    - name: http
+      port: 7878
+      targetPort: 7878
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - radarr.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: radarr
+          port: 7878
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sonarr
+  template:
+    metadata:
+      labels:
+        app: sonarr
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        runAsNonRoot: true
+        supplementalGroups: [568]
+      containers:
+        - name: sonarr
+          image: ghcr.io/home-operations/sonarr:5.0.0.2785@sha256:825bf13276077b2fa57dd1c0a67d10b2e71891b7391d19636615ede8ddc0a4a5
+          env:
+            - name: TZ
+              value: "Europe/Vienna"
+            - name: UMASK
+              value: "002"
+            - name: SONARR__APP__INSTANCENAME
+              value: "Sonarr"
+            - name: SONARR__UPDATE__BRANCH
+              value: "develop"
+          ports:
+            - name: http
+              containerPort: 8989
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8989
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media
+              mountPath: /srv/media
+      volumes:
+        - name: config
+          hostPath:
+            path: /srv/apps/sonarr
+            type: Directory
+        - name: media
+          hostPath:
+            path: /srv/media
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarr
+  namespace: media
+spec:
+  selector:
+    app: sonarr
+  ports:
+    - name: http
+      port: 8989
+      targetPort: 8989
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: sonarr
+  namespace: media
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - sonarr.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: sonarr
+          port: 8989
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prowlarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: prowlarr
+  template:
+    metadata:
+      labels:
+        app: prowlarr
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      securityContext:
+        runAsUser: 61654
+        runAsGroup: 61654
+        runAsNonRoot: true
+        supplementalGroups: [568]
+      containers:
+        - name: prowlarr
+          image: ghcr.io/home-operations/prowlarr:2.6.5.5623@sha256:0e2e6e9a2a16683a160ff1c6830d8192231a0502ab0d605b416023b2ca225ff9
+          env:
+            - name: TZ
+              value: "Europe/Vienna"
+            - name: UMASK
+              value: "002"
+            - name: PROWLARR__APP__INSTANCENAME
+              value: "Prowlarr"
+          ports:
+            - name: http
+              containerPort: 9696
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 9696
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: config
+          hostPath:
+            path: /srv/apps/prowlarr
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr
+  namespace: media
+spec:
+  selector:
+    app: prowlarr
+  ports:
+    - name: http
+      port: 9696
+      targetPort: 9696
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: prowlarr
+  namespace: media
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - prowlarr.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: prowlarr
+          port: 9696
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flaresolverr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: flaresolverr
+  template:
+    metadata:
+      labels:
+        app: flaresolverr
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      containers:
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
+          env:
+            - name: TZ
+              value: "Europe/Vienna"
+          ports:
+            - name: http
+              containerPort: 8191
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8191
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: media
+spec:
+  selector:
+    app: flaresolverr
+  ports:
+    - name: http
+      port: 8191
+      targetPort: 8191
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: flaresolverr
+  namespace: media
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - flaresolverr.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: flaresolverr
+          port: 8191
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plex
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      labels:
+        app: plex
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        runAsNonRoot: true
+        supplementalGroups: [568]
+      containers:
+        - name: plex
+          image: ghcr.io/home-operations/plex:1.43.4.10903@sha256:fdc6fe82bc7d8acd08fc0aa581fcb76722803ba5905e2537135a697347dd6149
+          env:
+            - name: TZ
+              value: "Europe/Vienna"
+          ports:
+            - name: http
+              containerPort: 32400
+          readinessProbe:
+            httpGet:
+              path: /identity
+              port: 32400
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media
+              mountPath: /srv/media
+            - name: transcode
+              mountPath: /transcode
+      volumes:
+        - name: config
+          hostPath:
+            path: /srv/apps/plex
+            type: Directory
+        - name: media
+          hostPath:
+            path: /srv/media
+            type: Directory
+        - name: transcode
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: media
+spec:
+  selector:
+    app: plex
+  ports:
+    - name: http
+      port: 32400
+      targetPort: 32400
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: plex
+  namespace: media
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - plex.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: plex
+          port: 32400

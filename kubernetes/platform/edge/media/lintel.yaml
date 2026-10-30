@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lintel
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: lintel
+  template:
+    metadata:
+      labels:
+        app: lintel
+    spec:
+      nodeSelector:
+        storage.burned.host/zfs: "true"
+      securityContext:
+        runAsUser: 569
+        runAsGroup: 569
+        supplementalGroups: [1002]
+      containers:
+        - name: lintel
+          image: ghcr.io/bakedchicken/lintel:latest
+          securityContext:
+            privileged: true
+          env:
+            - name: LINTEL_UMASK
+              value: "0007"
+            - name: LINTEL_ADDR
+              value: "0.0.0.0:8420"
+            - name: LINTEL_LIBRARY
+              value: /srv/3d-models
+            - name: XDG_CACHE_HOME
+              value: /cache
+            - name: TZ
+              value: "Europe/Vienna"
+          ports:
+            - name: http
+              containerPort: 8420
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8420
+            periodSeconds: 10
+          volumeMounts:
+            - name: library
+              mountPath: /srv/3d-models
+            - name: zfs
+              mountPath: /dev/zfs
+            - name: cache
+              mountPath: /cache
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: library
+          hostPath:
+            path: /srv/3d-models
+            type: Directory
+        - name: zfs
+          hostPath:
+            path: /dev/zfs
+            type: CharDevice
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lintel
+  namespace: media
+spec:
+  selector:
+    app: lintel
+  ports:
+    - name: http
+      port: 8420
+      targetPort: 8420
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: lintel
+  namespace: media
+spec:
+  parentRefs:
+    - name: edge
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - lintel.internal.edge.burned.host
+  rules:
+    - backendRefs:
+        - name: lintel
+          port: 8420

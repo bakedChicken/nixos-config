@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multus-edge
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  destination:
+    server: https://edge.burned.host:6443
+    namespace: kube-system
+  sources:
+    - repoURL: https://rke2-charts.rancher.io
+      chart: rke2-multus
+      targetRevision: v4.3.118
+      helm:
+        valuesObject:
+          labels:
+            nodeSelector:
+              storage.burned.host/zfs: "true"
+          config:
+            cni_conf:
+              confDir: /var/lib/rancher/k3s/agent/etc/cni/net.d
+              binDir: /var/lib/rancher/k3s/data/cni/
+              kubeconfig: /var/lib/rancher/k3s/agent/etc/cni/net.d/multus.d/multus.kubeconfig
+              multusAutoconfigDir: /var/lib/rancher/k3s/agent/etc/cni/net.d
+          manifests:
+            dhcpDaemonSet: true
+    - repoURL: oci://ghcr.io/bakedchicken/platform
+      targetRevision: latest
+      path: edge/multus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: -1
+      refresh: true
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
