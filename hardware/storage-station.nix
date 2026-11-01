@@ -1,5 +1,5 @@
 {
-  flake.nixosModules.storage-station-hardware = {
+  flake.nixosModules.storage-station-hardware = {config, ...}: {
     boot.kernelParams = [
       "console=tty0"
       "console=ttyS0,115200"
@@ -10,7 +10,50 @@
       "usb_storage"
       "uas"
       "sd_mod"
+      "igc"
+      "atlantic"
     ];
+
+    boot.initrd.network.enable = true;
+    boot.initrd.network.ssh = {
+      enable = true;
+      port = 2222;
+      hostKeys = ["/persist/etc/ssh/ssh_host_ed25519_initrd_key"];
+      authorizedKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2jPT/9sf897gTeV7skAMZe6a2vMaLXMwdp1QQDvbt4"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq58/Uy+EmKE+b4RveIsfUffQ+nHpW+D6rg2b70l3mS"
+      ];
+    };
+    boot.initrd.systemd.network.networks."10-enp5s0" = {
+      matchConfig.Name = "enp5s0";
+      networkConfig.DHCP = "yes";
+    };
+
+    boot.loader.systemd-boot.bootCounting = {
+      enable = true;
+      tries = 2;
+    };
+    systemd.services.boot-health = {
+      description = "Network and SSH are up, so this generation is good";
+      wantedBy = ["boot-complete.target"];
+      before = ["boot-complete.target"];
+      requiredBy = ["boot-complete.target"];
+      wants = [
+        "network-online.target"
+        "sshd.service"
+      ];
+      after = [
+        "network-online.target"
+        "sshd.service"
+      ];
+      unitConfig.FailureAction = "reboot";
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${config.systemd.package}/bin/systemctl is-active --quiet sshd.service network-online.target";
+      };
+    };
+
     hardware.enableRedistributableFirmware = true;
     hardware.cpu.amd.updateMicrocode = true;
     boot.kernelModules = ["sp5100_tco"];
@@ -19,19 +62,7 @@
       RebootWatchdogSec = "10min";
     };
 
-    boot.loader.systemd-boot.extraEntries."systemrescue.conf" = ''
-      title SystemRescue 13.02
-      linux /sysresccd/boot/x86_64/vmlinuz
-      initrd /sysresccd/boot/x86_64/sysresccd.img
-      options archisobasedir=sysresccd archisolabel=RESCUE1302
-    '';
-
     fileSystems = {
-      "/boot" = {
-        device = "/dev/disk/by-id/usb-_USB_DISK_MODULE_19001154C7B52558-0:0-part1";
-        fsType = "vfat";
-        options = ["umask=0077"];
-      };
       "/nix" = {
         device = "tank/system/nix";
         fsType = "zfs";

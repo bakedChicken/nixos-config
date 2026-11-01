@@ -10,6 +10,7 @@
   - [[#trust-all-projects-by-default][Trust all projects by default]]
   - [[#display-line-numbers-and-enable-some-mods-by-default][Display Line Numbers and Enable some mods by default]]
   - [[#indentation-and-text-properties][Indentation and Text properties]]
+  - [[#scrolling][Scrolling]]
   - [[#load-theme][Load theme]]
   - [[#hooks][Hooks]]
 - [[#built-in-packages-configuration][Built-in Packages Configuration]]
@@ -21,17 +22,22 @@
   - [[#marginalia][Marginalia]]
   - [[#orderless][Orderless]]
   - [[#corfu][Corfu]]
-  - [[#company][Company]]
   - [[#direnv][Direnv]]
   - [[#magit][Magit]]
+- [[#project-navigation][Project Navigation]]
+  - [[#consult][Consult]]
+  - [[#embark][Embark]]
+  - [[#breadcrumb][Breadcrumb]]
 - [[#eglot][Eglot]]
   - [[#nix][Nix]]
+  - [[#org-source-blocks][Org source blocks]]
+  - [[#workspace-symbols][Workspace symbols]]
 
 * UI configuration
 
 ** Enable Lexical Binding
 
-#+begin_src emacs-lisp :tangle yes :comments no
+#+begin_src emacs-lisp
 ;;; -*- lexical-binding: t -*-
 #+end_src
 
@@ -66,6 +72,17 @@
   (setq indent-tabs-mode nil)
   (setq next-line-add-newlines t) ; Add new line in the end of each buffer during save
   (setq require-final-newline t)
+#+end_src
+
+** Scrolling
+
+Scroll a line at a time instead of jumping half a window when point leaves it. In file buffers keep point in the middle of the window, so scrolling starts there
+
+#+begin_src emacs-lisp
+  (setq scroll-conservatively 101)
+  (setq maximum-scroll-margin 0.5)
+  (dolist (hook '(prog-mode-hook text-mode-hook conf-mode-hook))
+    (add-hook hook (lambda () (setq-local scroll-margin 99))))
 #+end_src
 
 ** Load theme
@@ -157,7 +174,7 @@ Fuzzy search commands in the minibuffer
 
 ** Corfu
 
-Popup autocompletion for the minibuffer
+Popup autocompletion in the buffer
 
 #+begin_src emacs-lisp
   (use-package corfu
@@ -165,51 +182,131 @@ Popup autocompletion for the minibuffer
     :bind (:map corfu-map ("<tab>" . corfu-complete))
     :config
     (setq corfu-cycle t)
+    (setq corfu-auto t)
+    (setq tab-always-indent 'complete)
+    (setq corfu-preselect 'first)
+    (setq corfu-popupinfo-delay '(0.5 . 0.2))
     (corfu-popupinfo-mode 1))
-#+end_src
-
-** Company
-
-Popup autocompletion for the main buffer
-
-#+begin_src emacs-lisp
-  (use-package company
-    :init (global-company-mode))
 #+end_src
 
 ** Direnv
 
 #+begin_src emacs-lisp
   (use-package envrc
-    :defer t
     :if (executable-find "direnv")
-    :hook (dired-mode . envrc-global-mode))
+    :hook (after-init . envrc-global-mode))
 #+end_src
 
 ** Magit
 
 #+begin_src emacs-lisp
-  (use-package magit)
+  (use-package magit
+    :config
+    (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1)
+    (setq magit-bury-buffer-function #'magit-restore-window-configuration)
+    (setq magit-diff-refine-hunk 'all))
 #+end_src
 
-With diff-hl tool to show changed lines in the buffer
+#+begin_src emacs-lisp
+  (use-package difftastic
+    :after magit
+    :demand t
+    :config
+    (difftastic-bindings-mode 1))
+#+end_src
 
 #+begin_src emacs-lisp
   (use-package diff-hl
     :hook
+    (after-init . global-diff-hl-mode)
+    (after-init . diff-hl-flydiff-mode)
+    (after-init . diff-hl-margin-mode)
     (magit-pre-refresh . diff-hl-magit-pre-refresh)
-    (magit-post-refresh . diff-hl-magit-post-refresh)
+    (magit-post-refresh . diff-hl-magit-post-refresh))
+#+end_src
+
+* Project Navigation
+
+** Consult
+
+Search and jump with live preview
+
+#+begin_src emacs-lisp
+  (use-package consult
+    :bind
+    (("C-x b" . consult-buffer)
+     ("C-x p b" . consult-project-buffer)
+     ("M-y" . consult-yank-pop)
+     ("M-g g" . consult-goto-line)
+     ("M-g i" . consult-imenu)
+     ("M-g I" . consult-imenu-multi)
+     ("M-s r" . consult-ripgrep)
+     ("M-s l" . consult-line)
+     ("M-s f" . consult-fd))
     :config
-    (global-diff-hl-mode 1))
+    (setq xref-show-xrefs-function #'consult-xref)
+    (setq xref-show-definitions-function #'consult-xref))
+#+end_src
+
+** Embark
+
+#+begin_src emacs-lisp
+  (use-package embark
+    :bind
+    (("C-." . embark-act)
+     ("C-c ." . embark-act)
+     ("C-h B" . embark-bindings)))
+
+  (use-package embark-consult
+    :hook (embark-collect-mode . consult-preview-at-point-mode))
+#+end_src
+
+** Breadcrumb
+
+Project path and current symbol in the header line
+
+#+begin_src emacs-lisp
+  (use-package breadcrumb
+    :hook (after-init . breadcrumb-mode))
 #+end_src
 
 * Eglot
 ** Nix
 
+Every code buffer starts Eglot
+
 #+begin_src emacs-lisp
+  (defun artur/eglot-ensure ()
+    (unless (derived-mode-p 'lisp-data-mode)
+      (eglot-ensure)))
+
   (use-package eglot
     :hook
     (eglot-managed-mode . eglot-inlay-hints-mode)
     (before-save . eglot-format)
-    (prog-mode . eglot-ensure))
+    (prog-mode . artur/eglot-ensure))
+#+end_src
+
+** Org source blocks
+
+#+begin_src emacs-lisp
+  (defun artur/org-src-eglot ()
+    (let ((org-file (buffer-file-name (marker-buffer org-src--beg-marker)))
+          (tangle (alist-get :tangle (nth 2 org-src--babel-info))))
+      (when (and org-file org-src--babel-info (derived-mode-p 'prog-mode) (not (derived-mode-p 'lisp-data-mode)))
+        (setq buffer-file-name
+              (if (member tangle '(nil "no" "yes"))
+                  (concat (file-name-sans-extension org-file) ".org-src." (car org-src--babel-info))
+                (expand-file-name tangle (file-name-directory org-file))))
+        (eglot-ensure))))
+
+  (add-hook 'org-src-mode-hook #'artur/org-src-eglot)
+#+end_src
+
+** Workspace symbols
+
+#+begin_src emacs-lisp
+  (use-package consult-eglot
+    :after eglot
+    :bind (:map eglot-mode-map ("M-g s" . consult-eglot-symbols)))
 #+end_src

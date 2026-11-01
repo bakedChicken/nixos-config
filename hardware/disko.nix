@@ -46,4 +46,29 @@
       };
     };
   };
+
+  flake.diskoConfigurations.storage-station = {
+    disko.devices.disk.main = {
+      type = "disk";
+      device = "/dev/disk/by-id/usb-_USB_DISK_MODULE_19001154C7B52558-0:0";
+      content = {
+        type = "gpt";
+        partitions = {
+          ESP = {
+            priority = 1;
+            name = "ESP";
+            start = "1M";
+            size = "100%";
+            type = "EF00";
+            content = {
+              type = "filesystem";
+              format = "vfat";
+              mountpoint = "/boot";
+              mountOptions = ["umask=0077"];
+            };
+          };
+        };
+      };
+    };
+  };
 }

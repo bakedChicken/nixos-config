@@ -51,17 +51,6 @@
         enable = true;
         configPath = "${config.xdg.configHome}/mozilla/firefox";
       };
-
-      programs.alacritty = {
-        enable = true;
-        settings = {
-          general.import = ["themes/noctalia.toml"];
-          font.normal = {
-            family = "FiraCode Nerd Font";
-            style = "Regular";
-          };
-        };
-      };
     };
   };
 
@@ -77,7 +66,19 @@
     home.packages = with pkgs; [
       claude-code
       claude-agent-acp
+      ripgrep
+      fd
+      difftastic
+      freerdp
     ];
+
+    programs.alacritty = {
+      enable = true;
+      settings.font.normal = {
+        family = "FiraCode Nerd Font";
+        style = "Regular";
+      };
+    };
 
     programs.emacs = {
       enable = true;
@@ -94,18 +95,32 @@
         epkgs.diff-hl
         epkgs.envrc
         epkgs.ligature
-        epkgs.company
         epkgs.toc-org
+        epkgs.tabspaces
+        epkgs.consult
+        epkgs.consult-eglot
+        epkgs.embark
+        epkgs.embark-consult
+        epkgs.wgrep
+        epkgs.breadcrumb
+        epkgs.difftastic
         epkgs.org-preview-html
         epkgs.agent-shell
       ];
       extraConfig = ''
         ;;; -*- lexical-binding: t -*-
 
-        (org-babel-load-file
-          (expand-file-name "early-init.org" user-emacs-directory))
-        (org-babel-load-file
-          (expand-file-name "config.org" user-emacs-directory))
+        (require 'ob-tangle)
+        (org-babel-tangle-file
+          (expand-file-name "early-init.org" user-emacs-directory)
+          (expand-file-name "early-init.el" user-emacs-directory)
+          "emacs-lisp")
+        (load (expand-file-name "early-init.el" user-emacs-directory))
+        (org-babel-tangle-file
+          (expand-file-name "config.org" user-emacs-directory)
+          (expand-file-name "config.el" user-emacs-directory)
+          "emacs-lisp")
+        (load (expand-file-name "config.el" user-emacs-directory))
       '';
     };
     xdg.configFile."emacs/early-init.org".source = ./emacs/early-init.org;

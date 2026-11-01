@@ -18,7 +18,7 @@
 
     boot.loader.systemd-boot.configurationLimit = 10;
 
-    boot.kernelPackages = pkgs.linuxPackages_latest;
+    boot.kernelPackages = pkgs.linuxPackages_7_2;
 
     zramSwap.enable = true;
 
@@ -35,7 +35,6 @@
       };
     };
 
-    networking.usePredictableInterfaceNames = false;
     networking.wireless.enable = lib.mkForce false;
 
     services.avahi = {

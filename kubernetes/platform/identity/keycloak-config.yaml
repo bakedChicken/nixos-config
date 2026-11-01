@@ -34,6 +34,24 @@ spec:
     - extract:
         key: kiali/oidc-client
 ---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: beer-tree-admin-oidc-client
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "53"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: beer-tree-admin-oidc-client
+  dataFrom:
+    - extract:
+        key: beer-tree/admin-oidc-client
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -73,6 +91,32 @@ data:
             - "https://kiali.internal.k8s.burned.host/*"
           webOrigins:
             - "https://kiali.internal.k8s.burned.host"
+        - clientId: beer-tree-admin
+          name: Beer Tree admin
+          enabled: true
+          clientAuthenticatorType: client-secret
+          secret: "$(env:BEER_TREE_ADMIN_CLIENT_SECRET)"
+          publicClient: false
+          standardFlowEnabled: true
+          implicitFlowEnabled: false
+          directAccessGrantsEnabled: false
+          serviceAccountsEnabled: false
+          redirectUris:
+            - "https://beer-tree.internal.k8s.burned.host/oauth2/callback"
+          webOrigins:
+            - "https://beer-tree.internal.k8s.burned.host"
+          attributes:
+            pkce.code.challenge.method: S256
+          protocolMappers:
+            - name: beer-tree-admin-groups
+              protocol: openid-connect
+              protocolMapper: oidc-group-membership-mapper
+              config:
+                full.path: "false"
+                id.token.claim: "true"
+                access.token.claim: "true"
+                userinfo.token.claim: "true"
+                claim.name: groups
 ---
 apiVersion: batch/v1
 kind: Job
@@ -123,6 +167,11 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: kiali-oidc-client
+                  key: client_secret
+            - name: BEER_TREE_ADMIN_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: beer-tree-admin-oidc-client
                   key: client_secret
           volumeMounts:
             - name: config

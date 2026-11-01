@@ -8,6 +8,7 @@
     hardware.pi3.uefi.enable = true;
     boot.loader.systemd-boot.enable = true;
     fileSystems."/".fsType = "btrfs";
+    networking.usePredictableInterfaceNames = false;
 
     services.journald.settings.Journal = {
       Storage = "volatile";

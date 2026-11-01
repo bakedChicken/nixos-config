@@ -90,6 +90,8 @@ spec:
         S3_SECRET_KEY: "{{ .rustfs_secret_key }}"
         APP_TOKEN: "{{ .app_token }}"
         RUNNER_TOKEN: "{{ .runner_token }}"
+        OIDC_CLIENT_SECRET: "{{ .admin_client_secret }}"
+        OAUTH2_PROXY_COOKIE_SECRET: "{{ .admin_cookie_secret }}"
   data:
     - secretKey: db_password
       remoteRef:
@@ -107,6 +109,14 @@ spec:
       remoteRef:
         key: beer-tree/runner-token
         property: token
+    - secretKey: admin_client_secret
+      remoteRef:
+        key: beer-tree/admin-oidc-client
+        property: client_secret
+    - secretKey: admin_cookie_secret
+      remoteRef:
+        key: beer-tree/admin-cookie
+        property: secret
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application

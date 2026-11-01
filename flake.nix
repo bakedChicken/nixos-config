@@ -61,6 +61,13 @@
       url = "git+ssh://git@github.com/bakedChicken/wrpd";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    hq = {
+      url = "git+ssh://git@github.com/bakedChicken/hq";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
+      inputs.treefmt-nix.follows = "treefmt-nix";
+    };
   };
 
   outputs = inputs @ {
@@ -146,6 +153,7 @@
                     self.darwinModules.workstation
                     self.darwinModules.builder
                     self.darwinModules.yoba
+                    inputs.hq.darwinModules.default
                     {
                       networking.hostName = "yoba-book-pro";
                       nixpkgs.hostPlatform = system;
@@ -231,6 +239,7 @@
                 system = "x86_64-linux";
                 hostPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPGl/IHpSEQ7w4By0Rbzeik857lXvoj+zK+XYCOQsOwf";
                 modules = [
+                  self.diskoConfigurations.storage-station
                   self.nixosModules.storage-station-hardware
                   self.nixosModules.ephemeral
                   self.nixosModules.nas
