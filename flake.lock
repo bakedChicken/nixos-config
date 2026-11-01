@@ -1204,11 +1204,11 @@
         "treefmt-nix": "treefmt-nix_5"
       },
       "locked": {
-        "lastModified": 1793528771,
-        "narHash": "sha256-6r2YbElpc1LLttOgAFRqyvCDmYflG1J+BuUwvNeMXnQ=",
+        "lastModified": 1793543529,
+        "narHash": "sha256-JJdI1EpRPIcj08oL6kCa3GNk7WvDEwl2PFP/OcRUj44=",
         "ref": "refs/heads/main",
-        "rev": "4de62f82547e8b11eef700b9f33769ad5723e68e",
-        "revCount": 118,
+        "rev": "3770721ac8c9a92a048e008e92cec102a60af93d",
+        "revCount": 123,
         "type": "git",
         "url": "ssh://git@github.com/bakedChicken/wrpd"
       },
