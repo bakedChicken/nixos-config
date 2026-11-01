@@ -58,9 +58,12 @@ in {
         after = [
           "network.target"
           "local-fs.target"
+          "zfs-volumes.target"
         ];
+        wants = ["zfs-volumes.target"];
         requires = ["sys-kernel-config.mount"];
         wantedBy = ["multi-user.target"];
+        restartIfChanged = false;
         unitConfig.ConditionPathExists = "/var/lib/target/saveconfig.json";
         serviceConfig = {
           Type = "oneshot";

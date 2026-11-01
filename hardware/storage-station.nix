@@ -3,6 +3,11 @@
     boot.kernelParams = [
       "console=tty0"
       "console=ttyS0,115200"
+      # Debugging boots where systemd and udev stall for 30s at a time after the pools import,
+      # in both boot stages: debug logs from both, and the stacks of tasks blocked for 20s.
+      "systemd.log_level=debug"
+      "udev.log_level=debug"
+      "sysctl.kernel.hung_task_timeout_secs=20"
     ];
     boot.initrd.availableKernelModules = [
       "ahci"
