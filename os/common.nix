@@ -11,12 +11,16 @@ let
           "@wheel"
           "@admin"
         ];
+        # Collect garbage while building once free space drops below 20 GiB, until 60 GiB are free,
+        # instead of waiting for the weekly run
+        min-free = 21474836480;
+        max-free = 64424509440;
       };
       channel.enable = false;
       optimise.automatic = true;
       gc = {
         automatic = true;
-        options = "--delete-older-than 30d";
+        options = "--delete-older-than 7d";
       };
     };
     time.timeZone = "Europe/Vienna";
