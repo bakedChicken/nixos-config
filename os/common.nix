@@ -1,5 +1,9 @@
-let
-  common = {config, ...}: {
+{inputs, ...}: let
+  common = {
+    config,
+    pkgs,
+    ...
+  }: {
     nix = {
       settings = {
         experimental-features = [
@@ -17,6 +21,23 @@ let
         extra-trusted-public-keys = ["storage-station.local-1:fIEPn2Z8C/0WGt23IqPnpTfwLSq62ebE6Df3mRMjQs0="];
         connect-timeout = 3;
         fallback = true;
+        flake-registry = pkgs.writeText "flake-registry.json" (builtins.toJSON {
+          version = 2;
+          flakes = [
+            {
+              from = {
+                type = "indirect";
+                id = "nixpkgs";
+              };
+              to = {
+                type = "github";
+                owner = "NixOS";
+                repo = "nixpkgs";
+                inherit (inputs.nixpkgs) rev;
+              };
+            }
+          ];
+        });
       };
       channel.enable = false;
       optimise.automatic = true;
