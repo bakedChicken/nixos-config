@@ -214,14 +214,6 @@ Popup autocompletion in the buffer
 #+end_src
 
 #+begin_src emacs-lisp
-  (use-package difftastic
-    :after magit
-    :demand t
-    :config
-    (difftastic-bindings-mode 1))
-#+end_src
-
-#+begin_src emacs-lisp
   (use-package diff-hl
     :hook
     (after-init . global-diff-hl-mode)

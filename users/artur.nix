@@ -68,7 +68,6 @@
       claude-agent-acp
       ripgrep
       fd
-      difftastic
       freerdp
     ];
 
@@ -104,7 +103,6 @@
         epkgs.embark-consult
         epkgs.wgrep
         epkgs.breadcrumb
-        epkgs.difftastic
         epkgs.nerd-icons-dired
         epkgs.org-preview-html
         epkgs.agent-shell
@@ -112,17 +110,13 @@
       extraConfig = ''
         ;;; -*- lexical-binding: t -*-
 
-        (require 'ob-tangle)
-        (org-babel-tangle-file
-          (expand-file-name "early-init.org" user-emacs-directory)
-          (expand-file-name "early-init.el" user-emacs-directory)
-          "emacs-lisp")
-        (load (expand-file-name "early-init.el" user-emacs-directory))
-        (org-babel-tangle-file
-          (expand-file-name "config.org" user-emacs-directory)
-          (expand-file-name "config.el" user-emacs-directory)
-          "emacs-lisp")
-        (load (expand-file-name "config.el" user-emacs-directory))
+        (dolist (name '("early-init" "config"))
+          (let* ((org (expand-file-name (concat name ".org") user-emacs-directory))
+                 (el (expand-file-name (format "%s-%s.el" name (md5 (file-truename org))) user-emacs-directory)))
+            (unless (file-exists-p el)
+              (require 'ob-tangle)
+              (org-babel-tangle-file org el "emacs-lisp"))
+            (load el)))
       '';
     };
     xdg.configFile."emacs/early-init.org".source = ./emacs/early-init.org;

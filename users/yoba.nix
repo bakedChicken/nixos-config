@@ -28,6 +28,8 @@
     home-manager.users.yoba = {
       imports = [self.homeModules.artur];
 
+      programs.emacs.package = pkgs.emacs.override {withNativeCompilation = false;};
+
       home.packages = with pkgs; [
         btop
         m1ddc
