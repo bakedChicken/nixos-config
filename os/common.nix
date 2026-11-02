@@ -11,10 +11,12 @@ let
           "@wheel"
           "@admin"
         ];
-        # Collect garbage while building once free space drops below 20 GiB, until 60 GiB are free,
-        # instead of waiting for the weekly run
-        min-free = 21474836480;
-        max-free = 64424509440;
+        min-free = 20 * 1024 * 1024 * 1024;
+        max-free = 60 * 1024 * 1024 * 1024;
+        extra-substituters = ["http://172.16.33.53:5000?priority=30"];
+        extra-trusted-public-keys = ["storage-station.local-1:fIEPn2Z8C/0WGt23IqPnpTfwLSq62ebE6Df3mRMjQs0="];
+        connect-timeout = 3;
+        fallback = true;
       };
       channel.enable = false;
       optimise.automatic = true;

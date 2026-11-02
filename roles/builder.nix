@@ -1,11 +1,23 @@
 {
-  flake.nixosModules.builder = {pkgs, ...}: {
+  flake.nixosModules.builder = {
+    config,
+    pkgs,
+    ...
+  }: {
     nix.daemonCPUSchedPolicy = "idle";
     nix.daemonIOSchedClass = "idle";
 
     environment.systemPackages = [pkgs.gitMinimal];
     nix.settings.build-dir = "/nix/var/nix/builds";
     systemd.tmpfiles.rules = ["d /nix/var/nix/builds 0755 root root 7d"];
+
+    # Serves this store as the binary cache every other host asks before building
+    age.secrets.binary-cache-key.rekeyFile = ../kubernetes/secrets/binary-cache-key.age;
+    services.harmonia.cache = {
+      enable = true;
+      signKeyPaths = [config.age.secrets.binary-cache-key.path];
+    };
+    networking.firewall.allowedTCPPorts = [5000];
   };
 
   flake.darwinModules.builder = {
