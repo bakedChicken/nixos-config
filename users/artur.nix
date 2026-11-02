@@ -92,6 +92,7 @@
         epkgs.orderless
         epkgs.corfu
         epkgs.magit
+        epkgs.evil
         epkgs.diff-hl
         epkgs.envrc
         epkgs.ligature
@@ -104,6 +105,7 @@
         epkgs.wgrep
         epkgs.breadcrumb
         epkgs.difftastic
+        epkgs.nerd-icons-dired
         epkgs.org-preview-html
         epkgs.agent-shell
       ];
@@ -163,5 +165,6 @@
       ];
     };
     programs.fzf.enable = true;
+    programs.nh.enable = true;
   };
 }

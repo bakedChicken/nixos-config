@@ -9,11 +9,12 @@
     };
     environment.shells = [pkgs.bashInteractive];
 
-    # The LG UltraGear's inputs over DDC (LG's addressing): DisplayPort 2, HDMI 1
     services.skhd = {
       enable = true;
       skhdConfig = ''
+        # DisplayPort 1, macbook USB-C output
         f13 : ${pkgs.m1ddc}/bin/m1ddc display 1D616FC7-1B39-4269-8535-59EAA0EF7D2D set input-alt 209
+        # HDMI 1, PC
         f14 : ${pkgs.m1ddc}/bin/m1ddc display 1D616FC7-1B39-4269-8535-59EAA0EF7D2D set input-alt 144
       '';
     };

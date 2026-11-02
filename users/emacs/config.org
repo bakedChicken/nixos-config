@@ -24,6 +24,7 @@
   - [[#corfu][Corfu]]
   - [[#direnv][Direnv]]
   - [[#magit][Magit]]
+  - [[#evil][Evil]]
 - [[#project-navigation][Project Navigation]]
   - [[#consult][Consult]]
   - [[#embark][Embark]]
@@ -123,6 +124,11 @@ Scroll a line at a time instead of jumping half a window when point leaves it. I
       (setq ls-lisp-use-string-collate nil)
       (setq ls-lisp-UCA-like-collation nil)
       (setq ls-lisp-use-insert-directory-program nil))
+
+  (use-package nerd-icons-dired
+    :hook (dired-mode . nerd-icons-dired-mode)
+    :init
+    (setq nerd-icons-font-family "FiraCode Nerd Font Mono"))
 #+end_src
 
 ** Org Mode
@@ -223,6 +229,19 @@ Popup autocompletion in the buffer
     (after-init . diff-hl-margin-mode)
     (magit-pre-refresh . diff-hl-magit-pre-refresh)
     (magit-post-refresh . diff-hl-magit-post-refresh))
+#+end_src
+
+** Evil
+
+#+begin_src emacs-lisp
+  (use-package evil
+    :init
+    (setq evil-undo-system 'undo-redo)
+    (setq evil-toggle-key "C-M-z")
+    :config
+    (evil-mode 1)
+    (define-key evil-insert-state-map (kbd "C-v") nil)
+    (cua-mode 1))
 #+end_src
 
 * Project Navigation
