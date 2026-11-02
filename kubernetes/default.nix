@@ -167,6 +167,8 @@ in {
           "/var/lib/rancher"
           "/var/lib/kubelet"
           "/var/lib/iscsi"
+          # The CNI chain names istio-cni at boot, before its installer runs, so the plugin binaries must survive reboots
+          "/opt/cni/bin"
         ];
 
         # Cilium turns off reverse-path filtering on the pods' interfaces by writing a file into /etc/sysctl.d,

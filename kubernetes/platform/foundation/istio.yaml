@@ -143,6 +143,12 @@ spec:
           profile: ambient
           cniConfDir: /etc/cni/net.d
           cniBinDir: /opt/cni/bin
+          # Keep the chain in istio-cni's own file, which sorts before Cilium's; Cilium rewrites its file at every boot
+          # without istio-cni, and pods started before istio-cni re-chains it would stay out of the mesh
+          istioOwnedCNIConfig: true
+          # Fail the pod's start instead of leaving it out of the mesh when the API is not reachable yet at boot
+          ambient:
+            enableAmbientDetectionRetry: true
   syncPolicy:
     automated:
       prune: true
