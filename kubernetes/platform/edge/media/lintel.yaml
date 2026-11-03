@@ -37,6 +37,8 @@ spec:
               value: /cache
             - name: TZ
               value: "Europe/Vienna"
+            - name: LINTEL_WORKER_TOKEN_FILE
+              value: /run/lintel/worker-token
           ports:
             - name: http
               containerPort: 8420
@@ -54,6 +56,32 @@ spec:
               mountPath: /cache
             - name: tmp
               mountPath: /tmp
+            - name: beside
+              mountPath: /run/lintel
+        # The embedding worker: reads previews and category prompts with CLIP for search by
+        # description and categorising by look, with the token Lintel writes for it.
+        - name: worker
+          image: ghcr.io/bakedchicken/lintel-worker:latest
+          env:
+            - name: LINTEL_URL
+              value: http://127.0.0.1:8420
+            - name: LINTEL_TOKEN_FILE
+              value: /run/lintel/worker-token
+            - name: HF_HOME
+              value: /cache/huggingface
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: beside
+              mountPath: /run/lintel
+              readOnly: true
       volumes:
         - name: library
           hostPath:
@@ -67,6 +95,10 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        - name: beside
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
 ---
 apiVersion: v1
 kind: Service
