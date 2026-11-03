@@ -79,6 +79,8 @@ spec:
           volumeMounts:
             - name: cache
               mountPath: /cache
+            - name: worker-tmp
+              mountPath: /tmp
             - name: beside
               mountPath: /run/lintel
               readOnly: true
@@ -99,6 +101,8 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+        - name: worker-tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
