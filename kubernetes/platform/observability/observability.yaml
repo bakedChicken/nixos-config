@@ -1191,6 +1191,57 @@ spec:
                 app.kubernetes.io/name: vmalert
             topologyKey: kubernetes.io/hostname
 ---
+# The Alertmanager configuration, rendered with the Telegram bot token and chat id from OpenBao
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: alertmanager-main
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: alertmanager-main
+    template:
+      data:
+        alertmanager.yaml: |
+          route:
+            receiver: telegram
+            group_by: [cluster, namespace, alertname]
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 12h
+            routes:
+              - receiver: "null"
+                matchers: [alertname=~"Watchdog|InfoInhibitor"]
+              - receiver: "null"
+                matchers: [severity="info"]
+          inhibit_rules:
+            - source_matchers: [severity="critical"]
+              target_matchers: [severity=~"warning|info"]
+              equal: [namespace, alertname]
+            - source_matchers: [severity="warning"]
+              target_matchers: [severity="info"]
+              equal: [namespace, alertname]
+            - source_matchers: [alertname="InfoInhibitor"]
+              target_matchers: [severity="info"]
+              equal: [namespace]
+            - target_matchers: [alertname="InfoInhibitor"]
+          receivers:
+            - name: "null"
+            - name: telegram
+              telegram_configs:
+                - bot_token: "{{ .bot_token }}"
+                  chat_id: {{ .chat_id }}
+                  send_resolved: true
+  dataFrom:
+    - extract:
+        key: alertmanager/telegram
+---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMAlertmanager
 metadata:
@@ -1218,23 +1269,4 @@ spec:
         resources:
           requests:
             storage: 1Gi
-  configRawYaml: |
-    route:
-      receiver: "null"
-      group_by: [cluster, namespace, alertname]
-      group_wait: 30s
-      group_interval: 5m
-      repeat_interval: 12h
-    inhibit_rules:
-      - source_matchers: [severity="critical"]
-        target_matchers: [severity=~"warning|info"]
-        equal: [namespace, alertname]
-      - source_matchers: [severity="warning"]
-        target_matchers: [severity="info"]
-        equal: [namespace, alertname]
-      - source_matchers: [alertname="InfoInhibitor"]
-        target_matchers: [severity="info"]
-        equal: [namespace]
-      - target_matchers: [alertname="InfoInhibitor"]
-    receivers:
-      - name: "null"
+  configSecret: alertmanager-main
