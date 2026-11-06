@@ -134,6 +134,15 @@ spec:
             # them in the ring forever, where they block writes and readiness.
             ingester:
               autoforget_unhealthy: true
+            # Rules come from ConfigMaps labelled loki_rule, which the chart's sidecar writes into the tenant's folder.
+            # Alerts go to every Alertmanager replica (found by DNS SRV), as replicas do not share received alerts
+            rulerConfig:
+              alertmanager_url: http://_http._tcp.vmalertmanager-main.observability.svc.cluster.local
+              enable_alertmanager_discovery: true
+              storage:
+                type: local
+                local:
+                  directory: /rules
             schemaConfig:
               configs:
                 - from: "2026-01-01"
@@ -172,6 +181,10 @@ spec:
             enabled: false
           lokiCanary:
             enabled: false
+          sidecar:
+            rules:
+              # The ruler reads <directory>/<tenant>/; without auth_enabled the tenant is "fake"
+              folder: /rules/fake
           test:
             enabled: false
           write:

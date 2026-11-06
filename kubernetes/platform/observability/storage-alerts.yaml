@@ -1,0 +1,72 @@
+# Alerts for the chain that took k8s-node-2 down on 2026-11-05: iSCSI sessions to storage-station dropping, ext4
+# errors left unrepaired on the volumes, a kernel oops on top of them, a dead node keeping its volumes attached (RustFS
+# could not start elsewhere for 30 hours) and Loki unable to upload while that lasted
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: storage
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "72"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: storage
+      rules:
+        - alert: NodeDownHoldingVolumes
+          expr: max by (node) (kube_node_status_condition{condition="Ready", status="true"}) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.node }} is NotReady; its iSCSI volumes stay attached to it"
+            description: >-
+              Pods of {{ $labels.node }} cannot start elsewhere while it holds their volumes. Restart the VM; if it
+              stays down, run kubectl taint node {{ $labels.node }} node.kubernetes.io/out-of-service=nodeshutdown:NoExecute
+              to release them, and remove the taint once it is back.
+        - alert: LokiUploadFailing
+          expr: sum by (pod) (increase(loki_ingester_chunks_flush_failures_total[15m])) > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.pod }} cannot upload log chunks to RustFS"
+            description: >-
+              Loki keeps the chunks in memory and rewrites them to its iSCSI volume at every WAL checkpoint, which
+              grows into write bursts that time out the iSCSI sessions. Check RustFS.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-rules-storage
+  namespace: observability
+  labels:
+    loki_rule: ""
+data:
+  storage.yaml: |
+    groups:
+      - name: storage-kernel
+        rules:
+          - alert: ISCSIConnectionDrops
+            expr: 'sum by (instance) (count_over_time({job="integrations/kubernetes/journal"} |~ "detected conn error|ping timeout of [0-9]+ secs expired|DataOut timeout" [15m])) > 3'
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.instance }} logged {{ $value }} iSCSI connection drops in 15 minutes"
+              description: Writes to the volumes stall while sessions reconnect; repeated drops leave ext4 errors behind.
+          - alert: Ext4FilesystemErrors
+            expr: 'sum by (instance) (count_over_time({job="integrations/kubernetes/journal"} |~ "EXT4-fs error|EXT4-fs \\([a-z0-9]+\\): warning: mounting fs with errors" [15m])) > 0'
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.instance }} has an ext4 volume with errors"
+              description: >-
+                Stop the workload, run e2fsck -fy on the volume from a node over iSCSI (storage-station cannot open
+                an exported zvol) and start it again.
+          - alert: KernelBug
+            expr: 'sum by (instance) (count_over_time({job="integrations/kubernetes/journal"} |~ "BUG: |Oops: |soft lockup|blocked for more than [0-9]+ seconds" [15m])) > 0'
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.instance }} logged a kernel bug, lockup or hung task"
+              description: An oops with panic_on_oops set takes the node down; read the kernel log around it.
