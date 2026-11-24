@@ -1,0 +1,16 @@
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: tempo.rustfs
+  namespace: openbao
+spec:
+  path: secret/data/tempo
+  name: rustfs
+  secretKey: secret_key
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }

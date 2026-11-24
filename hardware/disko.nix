@@ -1,23 +1,24 @@
+let
+  esp = {
+    start = "1M";
+    type = "EF00";
+    content = {
+      type = "filesystem";
+      format = "vfat";
+      mountpoint = "/boot";
+      mountOptions = ["umask=0077"];
+    };
+  };
+in
 {
   flake.diskoConfigurations.vm = {
     disko.devices.disk.main = {
-      type = "disk";
       device = "/dev/sda";
       content = {
         type = "gpt";
         partitions = {
-          ESP = {
-            priority = 1;
-            name = "ESP";
-            start = "1M";
+          ESP = esp // {
             end = "512M";
-            type = "EF00";
-            content = {
-              type = "filesystem";
-              format = "vfat";
-              mountpoint = "/boot";
-              mountOptions = ["umask=0077"];
-            };
           };
           root = {
             size = "100%";
@@ -49,23 +50,12 @@
 
   flake.diskoConfigurations.storage-station = {
     disko.devices.disk.main = {
-      type = "disk";
       device = "/dev/disk/by-id/usb-_USB_DISK_MODULE_19001154C7B52558-0:0";
       content = {
         type = "gpt";
         partitions = {
-          ESP = {
-            priority = 1;
-            name = "ESP";
-            start = "1M";
+          ESP = esp // {
             size = "100%";
-            type = "EF00";
-            content = {
-              type = "filesystem";
-              format = "vfat";
-              mountpoint = "/boot";
-              mountOptions = ["umask=0077"];
-            };
           };
         };
       };

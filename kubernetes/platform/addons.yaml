@@ -35,15 +35,6 @@ spec:
                 reloadStrategy: annotations
                 deployment:
                   replicas: 2
-                  affinity:
-                    podAntiAffinity:
-                      preferredDuringSchedulingIgnoredDuringExecution:
-                        - weight: 100
-                          podAffinityTerm:
-                            labelSelector:
-                              matchLabels:
-                                app: reloader-reloader
-                            topologyKey: kubernetes.io/hostname
                   resources:
                     requests:
                       cpu: 10m
@@ -183,47 +174,6 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-          - ServerSideApply=true
-        retry:
-          limit: -1
-          refresh: true
-          backoff:
-            duration: 10s
-            factor: 2
-            maxDuration: 5m
----
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: mktxp
-  namespace: argocd
-spec:
-  goTemplate: true
-  goTemplateOptions: ["missingkey=error"]
-  generators:
-    - list:
-        elements:
-          - cluster: edge
-            server: https://edge.burned.host:6443
-  template:
-    metadata:
-      name: "mktxp-{{ .cluster }}"
-      finalizers:
-        - resources-finalizer.argocd.argoproj.io
-    spec:
-      project: platform
-      destination:
-        server: "{{ .server }}"
-        namespace: mktxp
-      source:
-        repoURL: oci://ghcr.io/bakedchicken/platform
-        targetRevision: latest
-        path: mktxp
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
           - ServerSideApply=true
         retry:
           limit: -1

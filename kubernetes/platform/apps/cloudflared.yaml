@@ -2,23 +2,13 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: cloudflared
-  labels:
-    istio.io/dataplane-mode: ambient
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: cloudflared-tunnel
   namespace: cloudflared
-  annotations:
-    argocd.argoproj.io/sync-wave: "50"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: openbao
   target:
     name: cloudflared-tunnel
   dataFrom:
@@ -52,8 +42,8 @@ data:
       - hostname: beer-tree.burned.host
         path: ^/(app|recognize|detect|feedback|beers|labels|health)(/|$)
         service: http://api.app-beer-tree.svc.cluster.local:8000
-      - hostname: beer-tree.burned.host
-        service: http_status:404
+      - hostname: zulip.burned.host
+        service: http://zulip.zulip.svc.cluster.local:80
       - service: http_status:404
 ---
 apiVersion: apps/v1
@@ -83,7 +73,7 @@ spec:
               app.kubernetes.io/name: cloudflared
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:2026.10.0
+          image: docker.io/cloudflare/cloudflared:2026.10.0
           args:
             - tunnel
             - --config
@@ -98,7 +88,6 @@ spec:
               port: metrics
             failureThreshold: 1
             initialDelaySeconds: 10
-            periodSeconds: 10
           resources:
             requests:
               cpu: 10m

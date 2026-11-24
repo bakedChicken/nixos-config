@@ -1,5 +1,8 @@
 {self, ...}: {
-  flake.darwinModules.yoba = {pkgs, ...}: {
+  flake.darwinModules.yoba = {
+    pkgs,
+    ...
+  }: {
     system.primaryUser = "yoba";
     users.knownUsers = ["yoba"];
     users.users.yoba = {
@@ -22,7 +25,6 @@
     age.secrets.ghcr-token = {
       rekeyFile = ../kubernetes/secrets/ghcr-token.age;
       owner = "yoba";
-      mode = "0400";
     };
 
     home-manager.users.yoba = {

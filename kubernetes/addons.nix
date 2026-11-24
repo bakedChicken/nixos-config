@@ -1,9 +1,15 @@
 {
-  inputs,
   config,
+  democraticCsi,
   ...
 }: let
   clusters = config.kubernetes.clusters;
+  csiZfsPermissions = "create,destroy,mount,snapshot,clone,promote,rename,send,receive,hold,release,userprop,volsize,volblocksize,compression,refreservation,reservation,refquota,quota,snapdev";
+  internalGateway = {
+    name = "burned-gateway";
+    namespace = "gateway-system";
+    sectionName = "internal-https";
+  };
 in {
   # Push kubernetes/platform from the working tree to ghcr.io, where Argo CD syncs it from.
   perSystem = {pkgs, ...}: {
@@ -93,8 +99,9 @@ in {
           Type = "oneshot";
           RemainAfterExit = true;
           ExecStart = [
-            "${config.boot.zfs.package}/bin/zfs allow -u csi create,destroy,mount,snapshot,clone,promote,rename,send,receive,hold,release,userprop,volsize,volblocksize,compression,refreservation,reservation,refquota,quota,snapdev ${clusters.main.storage.dataset}"
-            "${config.boot.zfs.package}/bin/zfs allow -u csi create,destroy,mount,snapshot,clone,promote,rename,send,receive,hold,release,userprop,volsize,volblocksize,compression,refreservation,reservation,refquota,quota,snapdev ${clusters.edge.storage.dataset}"
+            "${config.boot.zfs.package}/bin/zfs allow -u csi ${csiZfsPermissions} ${clusters.main.storage.dataset}"
+            "${config.boot.zfs.package}/bin/zfs allow -u csi ${csiZfsPermissions} ${clusters.edge.storage.dataset}"
+            "${config.boot.zfs.package}/bin/zfs allow -u csi ${csiZfsPermissions} ${clusters.main.storage.postgresDataset}"
           ];
         };
       };
@@ -111,24 +118,15 @@ in {
     };
 
     flannel = {
-      config,
-      lib,
-      ...
-    }: {
-      services.k3s.extraFlags = lib.mkIf (config.kubernetes.role == "server") [
+      services.k3s.extraFlags = [
         "--flannel-ipv6-masq"
       ];
     };
 
-    cilium = {
-      config,
-      lib,
-      pkgs,
-      ...
-    }: let
+    cilium = {config, ...}: let
       cluster = config.kubernetes.cluster;
     in {
-      services.k3s = lib.mkIf (config.kubernetes.role == "server") {
+      services.k3s = {
         disable = [
           "traefik"
           "servicelb"
@@ -155,36 +153,24 @@ in {
             spec.bootstrap = true;
           };
           values = {
-            k8sServiceHost = "127.0.0.1";
+            # The k3s API load balancer listens on the IPv6 loopback
+            k8sServiceHost = "localhost";
             k8sServicePort = "6444";
-            ipv4.enabled = lib.elem "ipv4" cluster.families;
-            ipv6.enabled = lib.elem "ipv6" cluster.families;
+            ipv4.enabled = false;
+            ipv6.enabled = true;
             routingMode = "native";
             autoDirectNodeRoutes = true;
-            ipv4NativeRoutingCIDR = cluster.clusterCidr.ipv4;
-            ipv6NativeRoutingCIDR = cluster.clusterCidr.ipv6;
-            ipam.mode = "cluster-pool";
-            ipam.operator.clusterPoolIPv4PodCIDRList = [cluster.clusterCidr.ipv4];
-            ipam.operator.clusterPoolIPv4MaskSize = 24;
-            ipam.operator.clusterPoolIPv6PodCIDRList = [cluster.clusterCidr.ipv6];
+            ipv6NativeRoutingCIDR = cluster.clusterCidr;
+            ipam.operator.clusterPoolIPv6PodCIDRList = [cluster.clusterCidr];
             ipam.operator.clusterPoolIPv6MaskSize = 64;
-            extraConfig.enable-ipv6-ndp = "true";
-            extraConfig.ipv6-mcast-device = "eth0";
             kubeProxyReplacement = true;
             cni.exclusive = false;
             hubble.relay.enabled = true;
             l7Proxy = false;
-            envoy.enabled = false;
             hubble.ui.enabled = true;
             hubble.ui.httpRoute = {
               enabled = true;
-              parentRefs = [
-                {
-                  name = "burned-gateway";
-                  namespace = "gateway-system";
-                  sectionName = "internal-https";
-                }
-              ];
+              parentRefs = [internalGateway];
               hostnames = ["hubble.${cluster.internalDomain}"];
             };
           };
@@ -192,33 +178,63 @@ in {
       };
     };
 
-    kube-vip = {
-      config,
-      lib,
-      ...
-    }: {
-      services.k3s.manifests = lib.mkIf (config.kubernetes.role == "server") {
+    kube-vip = {...}: {
+      services.k3s.manifests = {
         kube-vip.source = ./infra/kube-vip.yaml;
       };
     };
 
-    openbao = {
-      config,
-      lib,
-      ...
-    }: let
+    # A second democratic-csi for the Postgres volumes: storage class iscsi-postgres, zvols in tank/kubernetes-postgres,
+    # which sanoid does not snapshot (CloudNativePG keeps its own backups in RustFS), iSCSI targets named pg-<namespace>-<pvc>.
+    # No snapshot class: CloudNativePG builds replicas with pg_basebackup
+    postgres-storage = {config, ...}: {
+      age.secrets = {
+        democratic-csi-postgres-config.rekeyFile = ./secrets/democratic-csi-config-postgres.age;
+      };
+
+      systemd.services.k3s.restartTriggers = [
+        config.age.secrets.democratic-csi-postgres-config.file
+      ];
+
+      services.k3s = {
+        manifests.democratic-csi-postgres-config.source = config.age.secrets.democratic-csi-postgres-config.path;
+        autoDeployCharts.democratic-csi-postgres = {
+          inherit (democraticCsi) repo name version hash;
+          targetNamespace = "kube-system";
+          values = {
+            csiDriver.name = "org.democratic-csi.iscsi-postgres";
+            driver = {
+              existingConfigSecret = "democratic-csi-postgres-driver-config";
+              config.driver = "zfs-generic-iscsi";
+            };
+            controller.driver.image.tag = democraticCsi.driverImageTag;
+            node.driver.image.tag = democraticCsi.driverImageTag;
+            storageClasses = [
+              {
+                name = "iscsi-postgres";
+                reclaimPolicy = "Retain";
+                volumeBindingMode = "Immediate";
+                allowVolumeExpansion = true;
+                parameters.fsType = "ext4";
+              }
+            ];
+          };
+        };
+      };
+    };
+
+    openbao = {config, ...}: let
       cluster = config.kubernetes.cluster;
-      isServer = config.kubernetes.role == "server";
     in {
-      age.secrets = lib.mkIf isServer {
+      age.secrets = {
         openbao-seal-key.rekeyFile = ./secrets/openbao-seal-key.age;
       };
 
-      systemd.services.k3s.restartTriggers = lib.mkIf isServer [
+      systemd.services.k3s.restartTriggers = [
         config.age.secrets.openbao-seal-key.file
       ];
 
-      services.k3s = lib.mkIf isServer {
+      services.k3s = {
         manifests.openbao-seal-key.source = config.age.secrets.openbao-seal-key.path;
         autoDeployCharts.openbao = {
           repo = "oci://ghcr.io/openbao/charts/openbao";
@@ -332,13 +348,7 @@ in {
               gateway.httpRoute = {
                 enabled = true;
                 hosts = ["openbao.${cluster.internalDomain}"];
-                parentRefs = [
-                  {
-                    name = "burned-gateway";
-                    namespace = "gateway-system";
-                    sectionName = "internal-https";
-                  }
-                ];
+                parentRefs = [internalGateway];
               };
             };
           };
@@ -348,29 +358,28 @@ in {
 
     argocd = {
       config,
-      lib,
       pkgs,
       ...
     }: let
       cluster = config.kubernetes.cluster;
-      isServer = config.kubernetes.role == "server";
     in {
-      age.secrets = lib.mkIf isServer {
+      age.secrets = {
         cloudflare-api-token.rekeyFile = ./secrets/cloudflare-api-token.age;
         keycloak-admin-password.rekeyFile = ./secrets/keycloak-admin-password.age;
         argocd-cluster-edge.rekeyFile = ./secrets/argocd-cluster-edge.age;
       };
 
-      systemd.services.k3s.restartTriggers = lib.mkIf isServer [
+      systemd.services.k3s.restartTriggers = [
         config.age.secrets.cloudflare-api-token.file
         config.age.secrets.keycloak-admin-password.file
         config.age.secrets.argocd-cluster-edge.file
       ];
 
-      systemd.services.argocd-ghcr-creds = lib.mkIf isServer {
+      systemd.services.argocd-ghcr-creds = {
         description = "Render the Argo CD ghcr.io repository credentials";
         wantedBy = ["k3s.service"];
         before = ["k3s.service"];
+        after = ["agenix-install-secrets.service"];
         restartTriggers = [config.age.secrets.ghcr-token.file];
         serviceConfig = {
           Type = "oneshot";
@@ -378,7 +387,7 @@ in {
           RuntimeDirectory = "argocd-ghcr-creds";
           RuntimeDirectoryMode = "0700";
           ExecStart = [
-            "${pkgs.coreutils}/bin/install -m 0600 ${(pkgs.formats.json {}).generate "argocd-ghcr-creds.yaml" {
+            "${pkgs.coreutils}/bin/install -m 0600 ${(pkgs.formats.yaml {}).generate "argocd-ghcr-creds.yaml" {
               apiVersion = "v1";
               kind = "Secret";
               metadata = {
@@ -398,7 +407,7 @@ in {
         };
       };
 
-      services.k3s = lib.mkIf isServer {
+      services.k3s = {
         manifests = {
           argocd-ghcr-creds.source = "/run/argocd-ghcr-creds/argocd-ghcr-creds.yaml";
           cloudflare-api-token.source = config.age.secrets.cloudflare-api-token.path;
@@ -418,18 +427,19 @@ in {
             dex.enabled = false;
             configs.params."server.insecure" = true;
             configs.params."controller.diff.server.side" = "true";
-            configs.cm."admin.enabled" = false;
-            configs.cm."oidc.config" = ''
-              name: Keycloak
-              issuer: https://auth.${cluster.domain}/realms/burned
-              clientID: argocd
-              clientSecret: $argocd-oidc-client-secret:client_secret
-              requestedScopes: ["openid", "profile", "email"]
-              enablePKCEAuthentication: true
-            '';
+            # A sync waiting on a resource its own revision can't make healthy never ends otherwise
+            configs.params."controller.sync.timeout.seconds" = "900";
             configs.rbac."policy.csv" = "g, admin, role:admin\ng, readonly, role:readonly";
-            configs.rbac.scopes = "[groups]";
             configs.cm = {
+              "admin.enabled" = false;
+              "oidc.config" = ''
+                name: Keycloak
+                issuer: https://auth.${cluster.domain}/realms/burned
+                clientID: argocd
+                clientSecret: $argocd-oidc-client-secret:client_secret
+                requestedScopes: ["openid", "profile", "email"]
+                enablePKCEAuthentication: true
+              '';
               "resource.customizations.health.argoproj.io_Application" = ''
                 hs = {}
                 hs.status = "Progressing"
@@ -485,29 +495,18 @@ in {
             server.httproute = {
               enabled = true;
               hostnames = ["argocd.${cluster.internalDomain}"];
-              parentRefs = [
-                {
-                  name = "burned-gateway";
-                  namespace = "gateway-system";
-                  sectionName = "internal-https";
-                }
-              ];
+              parentRefs = [internalGateway];
             };
           };
         };
       };
     };
 
-    argocd-spoke = {
-      config,
-      lib,
-      ...
-    }: let
+    argocd-spoke = {config, ...}: let
       ca = config.kubernetes.cluster.ca;
       tls = "/var/lib/rancher/k3s/server/tls";
-      isServer = config.kubernetes.role == "server";
     in {
-      age.secrets = lib.mkIf isServer {
+      age.secrets = {
         k3s-server-ca-crt = {
           rekeyFile = ca.cert;
           path = "${tls}/server-ca.crt";
@@ -526,7 +525,7 @@ in {
         };
       };
 
-      services.k3s.manifests = lib.mkIf isServer {
+      services.k3s.manifests = {
         argocd-cluster-admin.content = {
           apiVersion = "rbac.authorization.k8s.io/v1";
           kind = "ClusterRoleBinding";
@@ -547,42 +546,30 @@ in {
       };
     };
 
-    mktxp = {
-      config,
-      lib,
-      ...
-    }: let
-      isServer = config.kubernetes.role == "server";
-    in {
-      age.secrets = lib.mkIf isServer {
+    mktxp = {config, ...}: {
+      age.secrets = {
         mktxp-credentials.rekeyFile = ./secrets/mktxp-credentials.age;
       };
 
-      systemd.services.k3s.restartTriggers = lib.mkIf isServer [
+      systemd.services.k3s.restartTriggers = [
         config.age.secrets.mktxp-credentials.file
       ];
 
-      services.k3s.manifests = lib.mkIf isServer {
+      services.k3s.manifests = {
         mktxp-credentials.source = config.age.secrets.mktxp-credentials.path;
       };
     };
 
-    cloudflare-token = {
-      config,
-      lib,
-      ...
-    }: let
-      isServer = config.kubernetes.role == "server";
-    in {
-      age.secrets = lib.mkIf isServer {
+    cloudflare-token = {config, ...}: {
+      age.secrets = {
         cloudflare-api-token.rekeyFile = ./secrets/cloudflare-api-token.age;
       };
 
-      systemd.services.k3s.restartTriggers = lib.mkIf isServer [
+      systemd.services.k3s.restartTriggers = [
         config.age.secrets.cloudflare-api-token.file
       ];
 
-      services.k3s.manifests = lib.mkIf isServer {
+      services.k3s.manifests = {
         cloudflare-api-token.source = config.age.secrets.cloudflare-api-token.path;
       };
     };

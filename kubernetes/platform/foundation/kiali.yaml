@@ -1,0 +1,33 @@
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: kiali.oidc-client
+  namespace: openbao
+spec:
+  path: secret/data/kiali
+  name: oidc-client
+  secretKey: client_secret
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: kiali.signing-key
+  namespace: openbao
+spec:
+  path: secret/data/kiali
+  name: signing-key
+  secretKey: key
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }

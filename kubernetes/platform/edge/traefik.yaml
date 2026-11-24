@@ -22,19 +22,13 @@ spec:
             kubernetesGateway:
               enabled: true
               experimentalChannel: true
-          gatewayClass:
-            enabled: true
           gateway:
             enabled: false
-          nodeSelector:
-            storage.burned.host/zfs: "true"
           ports:
             cdp:
               port: 9222
               expose:
                 default: true
-              exposedPort: 9222
-              protocol: TCP
   syncPolicy:
     automated:
       prune: true

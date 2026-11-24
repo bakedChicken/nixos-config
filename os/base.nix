@@ -3,11 +3,7 @@
   inputs,
   ...
 }: {
-  flake.nixosModules.base = {
-    lib,
-    pkgs,
-    ...
-  }: {
+  flake.nixosModules.base = {lib, ...}: {
     imports = [
       self.nixosModules.common
       inputs.agenix.nixosModules.default
@@ -18,42 +14,35 @@
 
     boot.loader.systemd-boot.configurationLimit = 10;
 
-    boot.kernelPackages = pkgs.linuxPackages_7_2;
-
     zramSwap.enable = true;
 
     networking.useDHCP = false;
-    networking.networkmanager = {
-      enable = true;
-      settings.connection = {
-        "ipv4.dhcp-client-id" = "mac";
-        "ipv4.dhcp-ipv6-only-preferred" = 2;
-        "ipv4.clat" = 1;
-        "ipv6.addr-gen-mode" = 0;
-        "ipv6.ip6-privacy" = 0;
-        "ipv6.dhcp-duid" = "ll";
+    networking.useNetworkd = true;
+    systemd.network = {
+      wait-online.anyInterface = true;
+      networks."90-ethernet" = {
+        matchConfig = {
+          Type = "ether";
+          Kind = "!*";
+        };
+        networkConfig = {
+          DHCP = "yes";
+          IPv6AcceptRA = true;
+        };
+        dhcpV4Config = {
+          ClientIdentifier = "mac";
+          IPv6OnlyMode = true;
+        };
       };
     };
-
-    networking.wireless.enable = lib.mkForce false;
-
-    services.avahi = {
-      enable = true;
-      nssmdns4 = true;
-      nssmdns6 = true;
-      publish = {
-        enable = true;
-        userServices = true;
-        domain = true;
-      };
+    services.clatd.enable = true;
+    systemd.services.clatd.serviceConfig = {
+      Restart = "on-failure";
+      RestartSec = "10s";
     };
-    services.avahi.allowInterfaces = ["eth0"];
-    # systemd would create /etc/avahi/services for the daemon, which fails on a read-only /etc
-    systemd.services.avahi-daemon.serviceConfig.ConfigurationDirectory = lib.mkForce "";
-    # resolved owns resolv.conf (/etc is read-only on most machines); avahi alone answers mDNS: resolved
-    # takes its own name repeated back by the router for a conflict and renames itself endlessly
+
+    networking.domain = "internal.burned.host";
     services.resolved = {
-      enable = true;
       settings.Resolve = {
         MulticastDNS = false;
         LLMNR = false;

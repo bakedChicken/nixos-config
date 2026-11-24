@@ -1,0 +1,13 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: kiali-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "53"
+spec:
+  target:
+    name: kiali-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: kiali/oidc-client

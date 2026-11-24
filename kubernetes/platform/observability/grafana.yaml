@@ -1,0 +1,207 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: grafana
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  cluster:
+    name: default-postgres-cluster
+  name: grafana
+  login: true
+  inRoles:
+    - pg_read_all_data
+  passwordSecret:
+    name: grafana-pg-creds
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-pg-creds
+  namespace: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+spec:
+  target:
+    name: grafana-pg-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: grafana
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: grafana/db
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-pg-creds
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+spec:
+  target:
+    name: grafana-pg-creds
+  dataFrom:
+    - extract:
+        key: grafana/db
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-oidc-client-secret
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+spec:
+  target:
+    name: grafana-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: grafana/oidc-client
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+spec:
+  destination:
+    namespace: observability
+  sources:
+    - repoURL: ghcr.io/grafana-community/helm-charts
+      chart: grafana
+      targetRevision: 13.5.0
+      helm:
+        valuesObject:
+          dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+                - disableDeletion: false
+                  editable: true
+                  folder: ""
+                  name: default
+                  options:
+                    path: /var/lib/grafana/dashboards/default
+                  orgId: 1
+                  type: file
+          dashboards:
+            default:
+              mikrotik-mktxp:
+                gnetId: 13679
+                revision: 32
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+          sidecar:
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 128Mi
+            dashboards:
+              enabled: true
+              labelValue: "1"
+              searchNamespace: ALL
+              resource: configmap
+              folderAnnotation: grafana_folder
+              provider:
+                foldersFromFilesStructure: true
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - access: proxy
+                  name: Loki
+                  uid: loki
+                  type: loki
+                  url: http://loki.observability.svc.cluster.local:3100
+                - access: proxy
+                  name: Tempo
+                  type: tempo
+                  url: http://tempo.observability.svc.cluster.local:3200
+                - access: proxy
+                  name: Prometheus
+                  uid: prometheus
+                  isDefault: true
+                  type: prometheus
+                  url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
+                - access: proxy
+                  name: Alertmanager
+                  type: alertmanager
+                  url: http://vmalertmanager-main.observability.svc.cluster.local:9093
+                  jsonData:
+                    handleGrafanaManagedAlerts: false
+                    implementation: prometheus
+                - access: proxy
+                  jsonData:
+                    database: postgres
+                    postgresVersion: 1800
+                    sslmode: disable
+                  name: Postgres
+                  secureJsonData:
+                    password: $GRAFANA_POSTGRES_PASSWORD
+                  type: postgres
+                  url: default-postgres-cluster-rw.postgres.svc.cluster.local:5432
+                  user: grafana
+                # Beer Tree's database, read-only (the app's migrations grant `grafana` select); its
+                # dashboards come from the app's deploy/grafana ConfigMaps
+                - access: proxy
+                  jsonData:
+                    database: beertree
+                    postgresVersion: 1800
+                    sslmode: disable
+                  name: Beer Tree
+                  uid: beer-tree
+                  secureJsonData:
+                    password: $GRAFANA_POSTGRES_PASSWORD
+                  type: postgres
+                  url: default-postgres-cluster-rw.postgres.svc.cluster.local:5432
+                  user: grafana
+          envValueFrom:
+            GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+              secretKeyRef:
+                key: client_secret
+                name: grafana-oidc-client-secret
+            GRAFANA_POSTGRES_PASSWORD:
+              secretKeyRef:
+                key: password
+                name: grafana-pg-creds
+          grafana.ini:
+            auth:
+              disable_login_form: true
+            auth.generic_oauth:
+              allow_assign_grafana_admin: true
+              api_url: https://auth.burned.host/realms/burned/protocol/openid-connect/userinfo
+              auth_url: https://auth.burned.host/realms/burned/protocol/openid-connect/auth
+              client_id: grafana
+              enabled: true
+              name: Keycloak
+              role_attribute_path: contains(groups[*], 'admin') && 'GrafanaAdmin' || 'Viewer'
+              scopes: openid profile email
+              token_url: https://auth.burned.host/realms/burned/protocol/openid-connect/token
+              use_pkce: true
+            # Beer Tree's admin page (beer-tree.internal.k8s.burned.host, same site) frames the dashboards
+            security:
+              allow_embedding: true
+            # Beer Tree's per-country map uses the geomap "dynamic GeoJSON" layer (alpha)
+            panels:
+              enable_alpha: true
+            server:
+              root_url: https://grafana.internal.k8s.burned.host
+          route:
+            main:
+              enabled: true
+              hostnames:
+                - grafana.internal.k8s.burned.host
+              parentRefs:
+                - name: burned-gateway
+                  namespace: gateway-system
+                  sectionName: internal-https

@@ -25,26 +25,6 @@ spec:
               name: cloudflare-api-token-secret
               key: api-token
 ---
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-cloudflare-staging
-  annotations:
-    argocd.argoproj.io/sync-wave: "30"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  acme:
-    server: https://acme-staging-v02.api.letsencrypt.org/directory
-    email: artur.luppov@icloud.com
-    privateKeySecretRef:
-      name: letsencrypt-staging
-    solvers:
-      - dns01:
-          cloudflare:
-            apiTokenSecretRef:
-              name: cloudflare-api-token-secret
-              key: api-token
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -88,9 +68,6 @@ spec:
       group: ""
       kind: ConfigMap
       name: burned-gateway-options
-  allowedListeners:
-    namespaces:
-      from: All
   listeners:
     - name: http
       port: 80
@@ -103,7 +80,6 @@ spec:
         namespaces:
           from: All
       tls:
-        mode: Terminate
         certificateRefs:
           - name: burned-host-tls
     - name: wildcard-https
@@ -114,7 +90,6 @@ spec:
         namespaces:
           from: All
       tls:
-        mode: Terminate
         certificateRefs:
           - name: burned-host-tls
     - name: internal-https
@@ -125,7 +100,6 @@ spec:
         namespaces:
           from: All
       tls:
-        mode: Terminate
         certificateRefs:
           - name: burned-host-internal-tls
     - name: internal-apex-https
@@ -136,7 +110,6 @@ spec:
         namespaces:
           from: All
       tls:
-        mode: Terminate
         certificateRefs:
           - name: burned-host-internal-tls
 ---
@@ -150,7 +123,6 @@ metadata:
 spec:
   parentRefs:
     - name: burned-gateway
-      namespace: gateway-system
       sectionName: http
   rules:
     - filters:
@@ -202,10 +174,9 @@ metadata:
     argocd.argoproj.io/sync-wave: "32"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  refreshInterval: 1h
   secretStoreRefs:
-    - name: openbao
-      kind: ClusterSecretStore
+    - kind: ClusterSecretStore
+      name: openbao
   selector:
     secret:
       name: burned-host-tls
@@ -264,10 +235,9 @@ metadata:
     argocd.argoproj.io/sync-wave: "32"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  refreshInterval: 1h
   secretStoreRefs:
-    - name: openbao
-      kind: ClusterSecretStore
+    - kind: ClusterSecretStore
+      name: openbao
   selector:
     secret:
       name: burned-host-internal-tls

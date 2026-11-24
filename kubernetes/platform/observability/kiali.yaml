@@ -5,11 +5,7 @@ metadata:
   namespace: istio-system
   annotations:
     argocd.argoproj.io/sync-wave: "95"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: openbao
   target:
     name: kiali
     template:
@@ -26,11 +22,7 @@ metadata:
   namespace: istio-system
   annotations:
     argocd.argoproj.io/sync-wave: "95"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: openbao
   target:
     name: kiali-signing-key
   dataFrom:
@@ -44,12 +36,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "96"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: istio-system
   sources:
     - repoURL: https://kiali.org/helm-charts
@@ -63,10 +51,6 @@ spec:
               client_id: kiali
               issuer_uri: https://auth.burned.host/realms/burned
               disable_rbac: true
-              scopes:
-                - openid
-                - profile
-                - email
               username_claim: preferred_username
           login_token:
             signing_key: secret:kiali-signing-key:key
@@ -86,36 +70,17 @@ spec:
                 minAvailable: 1
             resources:
               requests:
-                cpu: 10m
                 memory: 128Mi
-              limits:
-                memory: 1Gi
           external_services:
             prometheus:
               url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
             grafana:
-              enabled: false
-            tracing:
               enabled: false
           server:
             web_root: /
             web_fqdn: kiali.internal.k8s.burned.host
             web_port: "443"
             web_schema: https
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -125,10 +90,6 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "96"
 spec:
-  parentRefs:
-    - name: burned-gateway
-      namespace: gateway-system
-      sectionName: internal-https
   hostnames:
     - kiali.internal.k8s.burned.host
   rules:

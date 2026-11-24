@@ -99,12 +99,12 @@ stringData:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: helm-oci-prometheus-community
+  name: helm-oci-zulip
   namespace: argocd
   labels:
     argocd.argoproj.io/secret-type: repository
 stringData:
   type: helm
-  name: prometheus-community
-  url: ghcr.io/prometheus-community/charts
+  name: zulip
+  url: ghcr.io/zulip/helm-charts
   enableOCI: "true"

@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - alloy.yaml
+  - grafana.yaml
+  - kiali.yaml
+  - kube-prometheus-rules.yaml
+  - loki.yaml
+  - observability.yaml
+  - opentelemetry-operator.yaml
+  - storage-alerts.yaml
+  - tempo.yaml
+  - victoria-metrics.yaml
+patches:
+  - target:
+      kind: Application
+    patch: |-
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: all
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+      spec:
+        project: platform
+        destination:
+          server: https://kubernetes.default.svc
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+          syncOptions:
+            - ServerSideApply=true
+          retry:
+            limit: -1
+            refresh: true
+            backoff:
+              duration: 10s
+              factor: 2
+              maxDuration: 5m
+  - target:
+      kind: ExternalSecret
+    patch: |-
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: all
+        annotations:
+          argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+      spec:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: openbao
+  - target:
+      kind: HTTPRoute
+    patch: |-
+      apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      metadata:
+        name: all
+      spec:
+        parentRefs:
+          - name: burned-gateway
+            namespace: gateway-system
+            sectionName: internal-https

@@ -1,0 +1,13 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openbao-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  target:
+    name: openbao-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: openbao/oidc-client

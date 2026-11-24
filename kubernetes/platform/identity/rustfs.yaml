@@ -1,0 +1,13 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rustfs-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  target:
+    name: rustfs-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: rustfs/oidc-client

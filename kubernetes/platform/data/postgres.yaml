@@ -14,12 +14,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: postgres
   sources:
     - repoURL: ghcr.io/cloudnative-pg/charts
@@ -32,20 +28,6 @@ spec:
               create: true
               annotations:
                 grafana_folder: Postgres
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -54,31 +36,13 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "10"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: postgres
   sources:
     - repoURL: ghcr.io/cloudnative-pg/charts
       chart: plugin-barman-cloud
       targetRevision: 0.8.1
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -91,10 +55,6 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false,SkipDryRunOnMissingResource=true
 spec:
   instances: 3
-  # Restores the newest base backup plus archived WAL from RustFS. Bootstrap is only
-  # used when the cluster is created, so this is what a reinstall runs instead of
-  # initdb, which would wipe the re-adopted volumes. A brand-new environment with an
-  # empty bucket needs initdb once.
   bootstrap:
     recovery:
       source: default-postgres-cluster
@@ -110,6 +70,7 @@ spec:
       prometheus.io/scrape: "true"
       prometheus.io/port: "9187"
   storage:
+    storageClass: iscsi-postgres
     size: 32Gi
   resources:
     requests:
@@ -117,9 +78,6 @@ spec:
       memory: 512Mi
     limits:
       memory: 1Gi
-  backup:
-    volumeSnapshot:
-      className: iscsi-snapshot
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       isWALArchiver: true
@@ -148,21 +106,6 @@ spec:
         key: ACCESS_SECRET_KEY
     wal:
       compression: gzip
----
-apiVersion: postgresql.cnpg.io/v1
-kind: ScheduledBackup
-metadata:
-  name: default-postgres-cluster-daily
-  namespace: postgres
-  annotations:
-    argocd.argoproj.io/sync-wave: "40"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  schedule: "0 0 3 * * *"
-  backupOwnerReference: self
-  cluster:
-    name: default-postgres-cluster
-  method: volumeSnapshot
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup

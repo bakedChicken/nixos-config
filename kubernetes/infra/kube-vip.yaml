@@ -28,8 +28,8 @@ rules:
     resources: ["pods"]
     verbs: ["list"]
 ---
-kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
 metadata:
   name: system:kube-vip-binding
 roleRef:
@@ -46,7 +46,6 @@ kind: DaemonSet
 metadata:
   labels:
     app.kubernetes.io/name: kube-vip-ds
-    app.kubernetes.io/version: v1.2.4
   name: kube-vip-ds
   namespace: kube-system
 spec:
@@ -57,7 +56,6 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: kube-vip-ds
-        app.kubernetes.io/version: v1.2.4
     spec:
       affinity:
         nodeAffinity:
@@ -72,32 +70,19 @@ spec:
           env:
             - name: vip_arp
               value: "true"
-            - name: port
-              value: "6443"
             - name: vip_nodename
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            - name: vip_subnet
-              value: "32"
             - name: dns_mode
-              value: ipv4
-            - name: dhcp_mode
-              value: dual
+              value: ipv6
             - name: cp_enable
               value: "true"
-            - name: cp_namespace
-              value: kube-system
             - name: svc_enable
               value: "true"
-            - name: svc_leasename
-              value: plndr-svcs-lock
             - name: address
               value: burned.host
-            - name: prometheus_server
-              value: :2112
           image: ghcr.io/kube-vip/kube-vip:v1.2.4
-          imagePullPolicy: IfNotPresent
           name: kube-vip
           securityContext:
             capabilities:

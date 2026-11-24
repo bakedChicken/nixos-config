@@ -1,0 +1,174 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+spec:
+  destination:
+    namespace: observability
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: k8s-monitoring
+      targetRevision: 4.5.3
+      helm:
+        valuesObject:
+          cluster:
+            name: main
+          destinations:
+            metrics:
+              type: prometheus
+              url: http://vminsert-metrics.observability.svc.cluster.local:8480/insert/0/prometheus/api/v1/write
+            logs:
+              type: loki
+              url: http://loki.observability.svc.cluster.local:3100/loki/api/v1/push
+            traces:
+              type: otlp
+              url: tempo.observability.svc.cluster.local:4317
+              tls:
+                insecure: true
+              metrics:
+                enabled: false
+              logs:
+                enabled: false
+          clusterMetrics:
+            enabled: true
+            collector: alloy-metrics
+            kube-state-metrics:
+              jobLabel: kube-state-metrics
+              metricsTuning:
+                useDefaultAllowList: false
+            kubelet:
+              jobLabel: kubelet
+              metricsTuning:
+                useDefaultAllowList: false
+              extraDiscoveryRules: |
+                rule {
+                  target_label = "metrics_path"
+                  replacement  = "/metrics"
+                }
+            kubeletResource:
+              jobLabel: kubelet
+              extraDiscoveryRules: |
+                rule {
+                  target_label = "metrics_path"
+                  replacement  = "/metrics/resource"
+                }
+            cadvisor:
+              jobLabel: kubelet
+              metricsTuning:
+                useDefaultAllowList: false
+              extraDiscoveryRules: |
+                rule {
+                  target_label = "metrics_path"
+                  replacement  = "/metrics/cadvisor"
+                }
+            apiServer:
+              enabled: true
+              jobLabel: apiserver
+            kubeDNS:
+              enabled: true
+          hostMetrics:
+            enabled: true
+            collector: alloy-metrics
+            linuxHosts:
+              enabled: true
+              jobLabel: node-exporter
+              metricsTuning:
+                useDefaultAllowList: false
+          annotationAutodiscovery:
+            enabled: true
+            collector: alloy-metrics
+            services:
+              enabled: false
+            annotations:
+              scrape: prometheus.io/scrape
+              metricsPath: prometheus.io/path
+              metricsPortNumber: prometheus.io/port
+            extraDiscoveryRules: |
+              rule {
+                source_labels = ["__meta_kubernetes_namespace"]
+                regex         = "openbao"
+                target_label  = "__param_format"
+                replacement   = "prometheus"
+              }
+          prometheusOperatorObjects:
+            enabled: true
+            collector: alloy-metrics
+          kubernetesManifests:
+            enabled: true
+            collector: alloy-metrics
+          podLogsViaLoki:
+            enabled: true
+            collector: alloy-logs
+          nodeLogs:
+            enabled: true
+            collector: alloy-logs
+          clusterEvents:
+            enabled: true
+            collector: alloy-singleton
+          applicationObservability:
+            enabled: true
+            collector: alloy-receiver
+            receivers:
+              otlp:
+                grpc:
+                  enabled: true
+                http:
+                  enabled: true
+          collectors:
+            alloy-metrics:
+              presets: [clustered, statefulset]
+              controller:
+                replicas: 2
+            alloy-logs:
+              presets: [filesystem-log-reader, daemonset]
+            alloy-singleton:
+              presets: [singleton]
+            alloy-receiver:
+              presets: [otel-receiver, deployment]
+              controller:
+                replicas: 2
+          telemetryServices:
+            k8s-manifest-tail:
+              deploy: true
+              config:
+                objects:
+                  - apiVersion: apps/v1
+                    kind: Deployment
+                  - apiVersion: apps/v1
+                    kind: StatefulSet
+                  - apiVersion: apps/v1
+                    kind: DaemonSet
+                  - apiVersion: batch/v1
+                    kind: CronJob
+                  - apiVersion: v1
+                    kind: ConfigMap
+                  - apiVersion: v1
+                    kind: Service
+                  - apiVersion: v1
+                    kind: PersistentVolumeClaim
+                  - apiVersion: gateway.networking.k8s.io/v1
+                    kind: HTTPRoute
+                  - apiVersion: argoproj.io/v1alpha1
+                    kind: Application
+            kube-state-metrics:
+              deploy: true
+            node-exporter:
+              deploy: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: alloy
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+spec:
+  hostnames:
+    - alloy.internal.k8s.burned.host
+  rules:
+    - backendRefs:
+        - name: k8s-monitoring-alloy-metrics
+          port: 12345

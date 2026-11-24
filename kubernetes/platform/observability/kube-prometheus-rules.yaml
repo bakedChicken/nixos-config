@@ -1,0 +1,60 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-rules
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+spec:
+  destination:
+    namespace: observability
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.3.0
+      helm:
+        valuesObject:
+          defaultRules:
+            rules:
+              alertmanager: false
+              configReloaders: false
+              prometheus: false
+              prometheusOperator: false
+            disabled:
+              NodeMemoryHighUtilization: true
+          alertmanager:
+            enabled: false
+          grafana:
+            enabled: false
+            # Dashboard ConfigMaps for the Grafana sidecar
+            forceDeployDashboards: true
+            sidecar:
+              dashboards:
+                annotations:
+                  grafana_folder: Kubernetes
+          kubeStateMetrics:
+            enabled: false
+          nodeExporter:
+            enabled: false
+            forceDeployDashboards: true
+            operatingSystems:
+              aix:
+                enabled: false
+              darwin:
+                enabled: false
+          prometheusOperator:
+            enabled: false
+          prometheus:
+            enabled: false
+          kubernetesServiceMonitors:
+            enabled: false
+          coreDns:
+            enabled: false
+          kubeControllerManager:
+            enabled: false
+          kubeScheduler:
+            enabled: false
+          kubeEtcd:
+            enabled: false
+          kubeProxy:
+            enabled: false

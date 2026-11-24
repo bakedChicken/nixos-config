@@ -27,12 +27,6 @@ metadata:
 spec:
   gatewayClassName: traefik
   listeners:
-    - name: http
-      port: 8000
-      protocol: HTTP
-      allowedRoutes:
-        namespaces:
-          from: All
     - name: https
       hostname: "*.internal.edge.burned.host"
       port: 8443
@@ -41,7 +35,6 @@ spec:
         namespaces:
           from: All
       tls:
-        mode: Terminate
         certificateRefs:
           - name: edge-internal-tls
     - name: cdp

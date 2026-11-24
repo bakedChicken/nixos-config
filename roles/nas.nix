@@ -1,4 +1,6 @@
-{inputs, ...}: {
+{config, ...}: let
+  clusters = config.kubernetes.clusters;
+in {
   flake.nixosModules.nas = {
     config,
     lib,
@@ -38,8 +40,6 @@
       enable = true;
       defaults.autodetected = "-a -o on -s (S/../.././02|L/../15/./04)";
     };
-    # Each dataset gets its own minute of the hour (UTC) for its snapshots and their pruning, and sanoid runs only
-    # at those minutes: taken all at once, the snapshots of every zvol and dataset hold up ZFS and the iSCSI disks
     services.sanoid = {
       enable = true;
       interval = "*-*-* *:05,13,21,29,37,45,53:00";
@@ -56,7 +56,7 @@
         };
       };
       datasets = {
-        "tank/kubernetes" = {
+        ${clusters.main.storage.dataset} = {
           useTemplate = ["production"];
           recursive = true;
           hourly_min = 5;
@@ -65,7 +65,7 @@
           monthly_hour = 1;
           monthly_min = 5;
         };
-        "tank/kubernetes-edge" = {
+        ${clusters.edge.storage.dataset} = {
           useTemplate = ["production"];
           recursive = true;
           hourly_min = 13;
@@ -110,12 +110,38 @@
           monthly_hour = 1;
           monthly_min = 45;
         };
+        "dozer/backups/time-machine".daily = 3;
+        "dozer/backups/rustfs" = {
+          autosnap = false;
+          hourly = 0;
+          daily = 7;
+          monthly = 0;
+        };
         "dozer/media" = {
           useTemplate = ["media"];
           recursive = true;
           daily_hour = 1;
           daily_min = 53;
         };
+      };
+    };
+
+    services.syncoid = {
+      enable = true;
+      interval = "*-*-* 04:57:00 UTC";
+      commands."${clusters.main.storage.dataset}/rustfs-system-rustfs-data" = {
+        target = "dozer/backups/rustfs";
+        recvOptions = "o dedup=off";
+        localTargetAllow = [
+          "change-key"
+          "compression"
+          "create"
+          "mount"
+          "mountpoint"
+          "receive"
+          "rollback"
+          "dedup"
+        ];
       };
     };
 
@@ -141,13 +167,10 @@
       settings = {
         global = {
           "server min protocol" = "SMB3";
-          "server multi channel support" = "yes";
           "ntlm auth" = "ntlmv2-only";
           "mangled names" = "no";
-          "unix charset" = "UTF-8";
           "vfs objects" = "fruit streams_xattr";
           "fruit:metadata" = "stream";
-          "fruit:model" = "MacSamba";
           "fruit:nfs_aces" = "no";
           "map to guest" = "Bad User";
         };
@@ -161,7 +184,6 @@
         };
         "media" = {
           "path" = "/srv/media/media";
-          "read only" = "yes";
           "guest ok" = "yes";
         };
         "time-machine" = {
@@ -174,6 +196,16 @@
         };
       };
     };
+
+    services.avahi = {
+      enable = true;
+      settings.publish = {
+        disable-publishing = false;
+        publish-addresses = true;
+        publish-domain = true;
+      };
+    };
+    systemd.services.avahi-daemon.serviceConfig.ConfigurationDirectory = lib.mkForce "";
 
     services.avahi.extraServiceFiles.smb = ''
       <?xml version="1.0" standalone="no"?>
@@ -237,7 +269,6 @@
     };
     users.groups.lintel.gid = 569;
 
-    # Lintel (edge/media) snapshots its dataset before every writing command, through /dev/zfs as uid 569
     systemd.services.lintel-zfs-delegation = {
       description = "Delegate the 3D models' dataset to the lintel user";
       after = ["zfs-import.target"];
@@ -249,8 +280,6 @@
       };
     };
 
-    # The shares' and the media's datasets are nofail mounts (flake.nix); without them the services would write to
-    # the empty directories on the tmpfs root
     systemd.services.samba-smbd.unitConfig.RequiresMountsFor = [
       "/srv/3d-models"
       "/srv/media"
@@ -259,7 +288,6 @@
 
     networking.firewall.allowedUDPPorts = [
       1900
-      5353
       32410
       32412
       32413
@@ -271,7 +299,6 @@
       8989
       9696
       8191
-      32400
     ];
     networking.firewall.allowedTCPPorts = [
       32400

@@ -1,0 +1,222 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: victoria-metrics-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+spec:
+  destination:
+    namespace: observability
+  sources:
+    - repoURL: https://victoriametrics.github.io/helm-charts
+      chart: victoria-metrics-operator
+      targetRevision: 0.68.1
+      helm:
+        valuesObject:
+          admissionWebhooks:
+            certManager:
+              enabled: true
+          operator:
+            prometheus_converter_add_argocd_ignore_annotations: true
+          env:
+            - name: VM_ENABLETCP6
+              value: "true"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_SERVICESCRAPE
+              value: "false"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_PODMONITOR
+              value: "false"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_PROBE
+              value: "false"
+            - name: VM_ENABLEDPROMETHEUSCONVERTER_SCRAPECONFIG
+              value: "false"
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMCluster
+metadata:
+  name: metrics
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  retentionPeriod: 30d
+  replicationFactor: 2
+  vmstorage:
+    replicaCount: 3
+    # Unready pods never count as available, so without AlwaysAllow an all-unready set can never be rolled
+    podDisruptionBudget:
+      unhealthyPodEvictionPolicy: AlwaysAllow
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vmstorage
+            topologyKey: kubernetes.io/hostname
+    storage:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 30Gi
+  vminsert:
+    replicaCount: 2
+    podDisruptionBudget:
+      unhealthyPodEvictionPolicy: AlwaysAllow
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vminsert
+            topologyKey: kubernetes.io/hostname
+    extraArgs:
+      maxConcurrentInserts: "64"
+  vmselect:
+    replicaCount: 2
+    podDisruptionBudget:
+      unhealthyPodEvictionPolicy: AlwaysAllow
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vmselect
+            topologyKey: kubernetes.io/hostname
+    extraArgs:
+      search.latencyOffset: 0s
+      search.maxLookback: 5m
+      search.disableImplicitConversion: "true"
+      vmalert.proxyURL: http://vmalert-main.observability.svc.cluster.local:8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vminsert
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+spec:
+  hostnames:
+    - vminsert.internal.k8s.burned.host
+  rules:
+    - backendRefs:
+        - name: vminsert-metrics
+          port: 8480
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAlert
+metadata:
+  name: main
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "72"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  replicaCount: 2
+  evaluationInterval: 30s
+  selectAllByDefault: true
+  extraArgs:
+    external.url: https://grafana.internal.k8s.burned.host
+    external.alert.source: >-
+      explore?left=%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A{{ .Expr | jsonEscape | queryEscape }}%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22{{ (.ActiveAt.Add -3600000000000).UnixMilli }}%22%2C%22to%22%3A%22now%22%7D%7D
+  datasource:
+    url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
+  remoteWrite:
+    url: http://vminsert-metrics.observability.svc.cluster.local:8480/insert/0/prometheus
+  remoteRead:
+    url: http://vmselect-metrics.observability.svc.cluster.local:8481/select/0/prometheus
+  notifiers:
+    - selector:
+        namespaceSelector:
+          matchNames:
+            - observability
+        labelSelector:
+          matchLabels:
+            alerting: main
+  podDisruptionBudget:
+    unhealthyPodEvictionPolicy: AlwaysAllow
+    maxUnavailable: 1
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vmalert
+            topologyKey: kubernetes.io/hostname
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: alertmanager-main
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+spec:
+  target:
+    name: alertmanager-main
+    template:
+      data:
+        alertmanager.yaml: |
+          route:
+            receiver: zulip
+            group_by: [cluster, namespace, alertname]
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 12h
+            routes:
+              - receiver: "null"
+                matchers: [alertname=~"Watchdog|InfoInhibitor"]
+              - receiver: "null"
+                matchers: [severity="info"]
+          inhibit_rules:
+            - source_matchers: [severity="critical"]
+              target_matchers: [severity="warning"]
+              equal: [namespace, alertname]
+          receivers:
+            - name: "null"
+            - name: zulip
+              webhook_configs:
+                - url: "https://zulip.burned.host/api/v1/external/alertmanager?api_key={{ .zulip_api_key }}&stream=Infrastructure&name=alertname&desc=summary"
+                  send_resolved: true
+  data:
+    - secretKey: zulip_api_key
+      remoteRef:
+        key: zulip/alertmanager-bot
+        property: api_key
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAlertmanager
+metadata:
+  name: main
+  namespace: observability
+  labels:
+    alerting: main
+  annotations:
+    argocd.argoproj.io/sync-wave: "72"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  replicaCount: 3
+  podDisruptionBudget:
+    unhealthyPodEvictionPolicy: AlwaysAllow
+    maxUnavailable: 1
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmalertmanager
+          topologyKey: kubernetes.io/hostname
+  storage:
+    volumeClaimTemplate:
+      spec:
+        resources:
+          requests:
+            storage: 1Gi
+  configSecret: alertmanager-main

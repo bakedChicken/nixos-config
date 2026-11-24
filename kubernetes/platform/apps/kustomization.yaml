@@ -1,0 +1,103 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - apps-project.yaml
+  - beer-tree.yaml
+  - cloudflared.yaml
+  - demo.yaml
+  - nextcloud.yaml
+  - zulip.yaml
+patches:
+  - target:
+      kind: Namespace
+    patch: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: namespace
+        labels:
+          istio.io/dataplane-mode: ambient
+        annotations:
+          argocd.argoproj.io/sync-wave: "-1"
+  - target:
+      kind: DatabaseRole
+    patch: |
+      apiVersion: postgresql.cnpg.io/v1
+      kind: DatabaseRole
+      metadata:
+        name: databaserole
+        annotations:
+          argocd.argoproj.io/sync-wave: "94"
+          argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+      spec:
+        cluster:
+          name: default-postgres-cluster
+        login: true
+  - target:
+      kind: Database
+    patch: |
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Database
+      metadata:
+        name: database
+        annotations:
+          argocd.argoproj.io/sync-wave: "94"
+          argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+      spec:
+        cluster:
+          name: default-postgres-cluster
+  - target:
+      kind: ExternalSecret
+    patch: |
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: externalsecret
+        annotations:
+          argocd.argoproj.io/sync-wave: "94"
+          argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+      spec:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: openbao
+  - target:
+      kind: Application
+    patch: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: application
+        annotations:
+          argocd.argoproj.io/sync-wave: "95"
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+      spec:
+        destination:
+          server: https://kubernetes.default.svc
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+          syncOptions:
+            - ServerSideApply=true
+          retry:
+            limit: -1
+            refresh: true
+            backoff:
+              duration: 10s
+              factor: 2
+              maxDuration: 5m
+  - target:
+      kind: HTTPRoute
+    patch: |
+      apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      metadata:
+        name: httproute
+        annotations:
+          argocd.argoproj.io/sync-wave: "96"
+      spec:
+        parentRefs:
+          - name: burned-gateway
+            namespace: gateway-system
+            sectionName: wildcard-https

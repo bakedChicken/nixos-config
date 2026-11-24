@@ -1,0 +1,64 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ambient-repair.yaml
+  - argocd-image-updater.yaml
+  - argocd.yaml
+  - beer-tree.yaml
+  - cert-manager.yaml
+  - demo.yaml
+  - external-secrets.yaml
+  - gateway.yaml
+  - grafana.yaml
+  - istio.yaml
+  - keycloak.yaml
+  - kiali.yaml
+  - loki.yaml
+  - nextcloud.yaml
+  - openbao.yaml
+  - postgres.yaml
+  - rustfs.yaml
+  - tempo.yaml
+  - zulip.yaml
+patches:
+  - target:
+      kind: RandomSecret
+    patch: |
+      apiVersion: redhatcop.redhat.io/v1alpha1
+      kind: RandomSecret
+      metadata:
+        name: any
+        annotations:
+          argocd.argoproj.io/sync-wave: "20"
+          argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+      spec:
+        authentication:
+          role: vault-config-operator
+          serviceAccount:
+            name: vault-config-operator
+        isKVSecretsEngineV2: true
+        kvSecretRetainPolicy: Retain
+  - target:
+      kind: Application
+    patch: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: any
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+      spec:
+        project: platform
+        destination:
+          server: https://kubernetes.default.svc
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+          retry:
+            limit: -1
+            refresh: true
+            backoff:
+              duration: 10s
+              factor: 2
+              maxDuration: 5m

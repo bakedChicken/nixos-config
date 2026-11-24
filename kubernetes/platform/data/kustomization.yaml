@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - postgres.yaml
+  - rustfs.yaml
+patches:
+  - target:
+      kind: Application
+    patch: |
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: application
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+      spec:
+        project: platform
+        destination:
+          server: https://kubernetes.default.svc
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+          syncOptions:
+            - ServerSideApply=true
+          retry:
+            limit: -1
+            refresh: true
+            backoff:
+              duration: 10s
+              factor: 2
+              maxDuration: 5m

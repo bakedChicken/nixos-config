@@ -18,9 +18,6 @@ spec:
       targetRevision: v4.3.118
       helm:
         valuesObject:
-          labels:
-            nodeSelector:
-              storage.burned.host/zfs: "true"
           config:
             cni_conf:
               confDir: /var/lib/rancher/k3s/agent/etc/cni/net.d

@@ -1,4 +1,8 @@
-{inputs, ...}: let
+{
+  self,
+  inputs,
+  ...
+}: let
   common = {
     config,
     pkgs,
@@ -17,7 +21,7 @@
         ];
         min-free = 20 * 1024 * 1024 * 1024;
         max-free = 60 * 1024 * 1024 * 1024;
-        extra-substituters = ["http://172.16.33.53:5000?priority=30"];
+        extra-substituters = ["http://${self.nixosConfigurations.storage-station.config.networking.fqdn}:5000?priority=30"];
         extra-trusted-public-keys = ["storage-station.local-1:fIEPn2Z8C/0WGt23IqPnpTfwLSq62ebE6Df3mRMjQs0="];
         connect-timeout = 3;
         fallback = true;

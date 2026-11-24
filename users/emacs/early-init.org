@@ -1,5 +1,5 @@
 #+AUTHOR: Artur Luppov
-#+DESCRIPTION: Early init Emacs configuration file
+#+DESCRIPTION: UI configuration, loaded from init.el before config.org
 
 * UI configuration
 ** Turn off headbars

@@ -3,10 +3,8 @@
     boot.kernelParams = [
       "console=tty0"
       "console=ttyS0,115200"
-      # Debugging boots where systemd and udev stall for 30s at a time after the pools import,
-      # in both boot stages: debug logs from both, and the stacks of tasks blocked for 20s.
-      "systemd.log_level=debug"
-      "udev.log_level=debug"
+      # The stacks of tasks blocked for 20s, in both boot stages: tank's SSDs stall for longer, and the
+      # KernelBug alert reads these reports
       "sysctl.kernel.hung_task_timeout_secs=20"
     ];
     boot.initrd.availableKernelModules = [
@@ -24,15 +22,14 @@
       enable = true;
       port = 2222;
       hostKeys = ["/persist/etc/ssh/ssh_host_ed25519_initrd_key"];
-      authorizedKeys = [
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2jPT/9sf897gTeV7skAMZe6a2vMaLXMwdp1QQDvbt4"
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq58/Uy+EmKE+b4RveIsfUffQ+nHpW+D6rg2b70l3mS"
-      ];
+      authorizedKeys = config.users.users.artur.openssh.authorizedKeys.keys;
     };
     boot.initrd.systemd.network.networks."10-enp5s0" = {
       matchConfig.Name = "enp5s0";
       networkConfig.DHCP = "yes";
     };
+    # enp5s0 becomes a bridge port in the system; its initrd address must not stay on it
+    boot.initrd.network.flushBeforeStage2 = true;
 
     boot.loader.systemd-boot.bootCounting = {
       enable = true;
@@ -40,7 +37,6 @@
     };
     systemd.services.boot-health = {
       description = "Network and SSH are up, so this generation is good";
-      wantedBy = ["boot-complete.target"];
       before = ["boot-complete.target"];
       requiredBy = ["boot-complete.target"];
       wants = [
@@ -62,16 +58,11 @@
     hardware.enableRedistributableFirmware = true;
     hardware.cpu.amd.updateMicrocode = true;
     boot.kernelModules = ["sp5100_tco"];
-    systemd.settings.Manager = {
-      RuntimeWatchdogSec = "30s";
-      RebootWatchdogSec = "10min";
-    };
 
     fileSystems = {
       "/nix" = {
         device = "tank/system/nix";
         fsType = "zfs";
-        neededForBoot = true;
       };
       "/persist" = {
         device = "tank/system/persist";
@@ -79,81 +70,88 @@
       };
     };
 
-    boot.supportedFilesystems.zfs = true;
     boot.zfs.forceImportRoot = false;
     boot.zfs.extraPools = ["dozer"];
     networking.hostId = "7bbabf8f";
 
-    networking.networkmanager.settings.main.no-auto-default = "*";
-    services.avahi.allowInterfaces = [
+    services.avahi.settings.server.allow-interfaces = [
       "br0"
       "br33"
     ];
-    networking.networkmanager.ensureProfiles.profiles = {
-      br0 = {
-        connection = {
-          id = "br0";
-          type = "bridge";
-          interface-name = "br0";
+    systemd.network = {
+      netdevs = {
+        "10-br0".netdevConfig = {
+          Kind = "bridge";
+          Name = "br0";
         };
-        bridge.stp = false;
-        ipv4.method = "auto";
-        ipv6.method = "auto";
-      };
-      br0-enp5s0 = {
-        connection = {
-          id = "br0-enp5s0";
-          type = "ethernet";
-          interface-name = "enp5s0";
-          controller = "br0";
-          port-type = "bridge";
+        "10-br33".netdevConfig = {
+          Kind = "bridge";
+          Name = "br33";
+        };
+        "10-vlan33" = {
+          netdevConfig = {
+            Kind = "vlan";
+            Name = "vlan33";
+          };
+          vlanConfig.Id = 33;
         };
       };
-      br33 = {
-        connection = {
-          id = "br33";
-          type = "bridge";
-          interface-name = "br33";
+      networks = {
+        "10-enp5s0" = {
+          matchConfig.Name = "enp5s0";
+          networkConfig = {
+            Bridge = "br0";
+            VLAN = ["vlan33"];
+          };
         };
-        bridge.stp = false;
-        ipv4 = {
-          method = "auto";
-          never-default = true;
+        "10-br33-ports" = {
+          matchConfig.Name = "vlan33 enp6s0 enp7s0";
+          networkConfig.Bridge = "br33";
+          linkConfig.RequiredForOnline = "no";
         };
-        ipv6 = {
-          method = "auto";
-          never-default = true;
+        "20-br0" = {
+          matchConfig.Name = "br0";
+          networkConfig = {
+            DHCP = "yes";
+            IPv6AcceptRA = true;
+          };
+          dhcpV4Config.ClientIdentifier = "mac";
         };
-      };
-      br33-vlan33 = {
-        connection = {
-          id = "br33-vlan33";
-          type = "vlan";
-          interface-name = "vlan33";
-          controller = "br33";
-          port-type = "bridge";
-        };
-        vlan = {
-          parent = "enp5s0";
-          id = 33;
-        };
-      };
-      br33-enp6s0 = {
-        connection = {
-          id = "br33-enp6s0";
-          type = "ethernet";
-          interface-name = "enp6s0";
-          controller = "br33";
-          port-type = "bridge";
-        };
-      };
-      br33-enp7s0 = {
-        connection = {
-          id = "br33-enp7s0";
-          type = "ethernet";
-          interface-name = "enp7s0";
-          controller = "br33";
-          port-type = "bridge";
+        "20-br33" = {
+          matchConfig.Name = "br33";
+          networkConfig = {
+            DHCP = "yes";
+            IPv6AcceptRA = true;
+          };
+          dhcpV4Config = {
+            ClientIdentifier = "mac";
+            UseGateway = false;
+            IPv6OnlyMode = true;
+          };
+          ipv6AcceptRAConfig.UseGateway = false;
+          routingPolicyRules = [
+            {
+              To = config.kubernetes.cluster.clusterCidr;
+              Table = "main";
+              Priority = 99;
+            }
+            {
+              From = "fd71:895d:e328:33::/64";
+              Table = 33;
+              Priority = 100;
+            }
+          ];
+          routes = [
+            {
+              Destination = "fd71:895d:e328:33::/64";
+              Table = 33;
+            }
+            {
+              Gateway = "_ipv6ra";
+              Table = 33;
+            }
+          ];
+          linkConfig.RequiredForOnline = "no";
         };
       };
     };

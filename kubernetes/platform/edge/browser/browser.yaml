@@ -28,8 +28,6 @@ spec:
     spec:
       hostname: chromium
       terminationGracePeriodSeconds: 5
-      nodeSelector:
-        storage.burned.host/zfs: "true"
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000
@@ -58,8 +56,6 @@ spec:
               value: headless
             - name: WLR_RENDERER
               value: pixman
-            - name: WLR_LIBINPUT_NO_DEVICES
-              value: "1"
             - name: TZ
               value: "Europe/Vienna"
           volumeMounts:
@@ -85,7 +81,13 @@ spec:
           image: docker.io/library/browser:nix
           imagePullPolicy: Never
           command:
-            [websockify, --web, /share/webapps/novnc, "6080", "127.0.0.1:5900"]
+            [
+              websockify,
+              --web,
+              /share/webapps/novnc,
+              "[::]:6080",
+              "127.0.0.1:5900",
+            ]
           ports:
             - name: http
               containerPort: 6080
@@ -96,7 +98,7 @@ spec:
           image: docker.io/library/browser:nix
           imagePullPolicy: Never
           command:
-            [socat, "TCP-LISTEN:9223,fork,reuseaddr", "TCP:127.0.0.1:9222"]
+            [socat, "TCP6-LISTEN:9223,fork,reuseaddr", "TCP4:127.0.0.1:9222"]
           ports:
             - name: cdp
               containerPort: 9223
@@ -120,7 +122,6 @@ spec:
   ports:
     - name: http
       port: 6080
-      targetPort: 6080
     - name: cdp
       port: 9222
       targetPort: 9223

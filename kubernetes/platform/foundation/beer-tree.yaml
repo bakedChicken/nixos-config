@@ -1,0 +1,101 @@
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: beer-tree.db
+  namespace: openbao
+spec:
+  path: secret/data/beer-tree
+  name: db
+  secretKey: password
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: beer-tree.rustfs
+  namespace: openbao
+spec:
+  path: secret/data/beer-tree
+  name: rustfs
+  secretKey: secret_key
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 40
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: beer-tree.app-token
+  namespace: openbao
+spec:
+  path: secret/data/beer-tree
+  name: app-token
+  secretKey: token
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 40
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: beer-tree.runner-token
+  namespace: openbao
+spec:
+  path: secret/data/beer-tree
+  name: runner-token
+  secretKey: token
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 48
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: beer-tree.admin-oidc-client
+  namespace: openbao
+spec:
+  path: secret/data/beer-tree
+  name: admin-oidc-client
+  secretKey: client_secret
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: beer-tree.admin-cookie
+  namespace: openbao
+spec:
+  path: secret/data/beer-tree
+  name: admin-cookie
+  secretKey: secret
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }

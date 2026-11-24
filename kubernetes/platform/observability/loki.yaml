@@ -1,0 +1,138 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: loki-rustfs-creds
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "69"
+spec:
+  target:
+    name: loki-rustfs-creds
+    template:
+      data:
+        AWS_ACCESS_KEY_ID: loki
+        AWS_SECRET_ACCESS_KEY: "{{ .secret_key }}"
+  dataFrom:
+    - extract:
+        key: loki/rustfs
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+spec:
+  destination:
+    namespace: observability
+  sources:
+    - repoURL: ghcr.io/grafana-community/helm-charts
+      chart: loki
+      targetRevision: 18.15.1
+      helm:
+        valuesObject:
+          backend:
+            replicas: 0
+          monitoring:
+            dashboards:
+              enabled: true
+              annotations:
+                grafana_folder: Loki
+            rules:
+              enabled: true
+          global:
+            extraArgs:
+              - "-config.expand-env=true"
+            extraEnvFrom:
+              - secretRef:
+                  name: loki-rustfs-creds
+          loki:
+            auth_enabled: false
+            limits_config:
+              retention_period: 168h
+            compactor:
+              retention_enabled: true
+              delete_request_store: s3
+            structuredConfig:
+              common:
+                ring:
+                  kvstore:
+                    store: memberlist
+                  instance_enable_ipv6: true
+              frontend:
+                instance_enable_ipv6: true
+              memberlist:
+                bind_addr: ["::"]
+            ingester:
+              autoforget_unhealthy: true
+            rulerConfig:
+              external_url: https://grafana.internal.k8s.burned.host
+              datasource_uid: loki
+              alertmanager_url: http://_http._tcp.vmalertmanager-main.observability.svc.cluster.local
+              enable_alertmanager_discovery: true
+              storage:
+                type: local
+                local:
+                  directory: /rules
+            schemaConfig:
+              configs:
+                - from: "2026-01-01"
+                  index:
+                    period: 24h
+                    prefix: index_
+                  object_store: s3
+                  schema: v13
+                  store: tsdb
+            storage:
+              bucketNames:
+                chunks: loki
+              s3:
+                accessKeyId: ${AWS_ACCESS_KEY_ID}
+                endpoint: rustfs-svc.rustfs-system.svc.cluster.local:9000
+                insecure: true
+                region: us-east-1
+                s3ForcePathStyle: true
+                secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+          read:
+            replicas: 0
+          singleBinary:
+            podAnnotations:
+              k8s.grafana.com/job: observability/loki
+              k8s.grafana.com/metrics.container: loki
+              prometheus.io/port: "3100"
+              prometheus.io/scrape: "true"
+            replicas: 3
+          gateway:
+            enabled: false
+          chunksCache:
+            enabled: false
+          resultsCache:
+            enabled: false
+          lokiCanary:
+            enabled: false
+          sidecar:
+            rules:
+              folder: /rules/fake
+          test:
+            enabled: false
+          write:
+            replicas: 0
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: loki
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "71"
+spec:
+  hostnames:
+    - loki.internal.k8s.burned.host
+  rules:
+    - matches:
+        - path:
+            value: /loki/api/v1/push
+      backendRefs:
+        - name: loki
+          port: 3100

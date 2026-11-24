@@ -1,5 +1,5 @@
 {self, ...}: {
-  flake.nixosModules.artur = {pkgs, ...}: {
+  flake.nixosModules.artur = {
     users.users.artur = {
       description = "Artur Luppov";
       isNormalUser = true;
@@ -7,14 +7,12 @@
       group = "artur";
       extraGroups = [
         "wheel"
-        "networkmanager"
       ];
       hashedPassword = "$6$Uk57TgLuIsocbW6m$Y1Ljj7fP4/m5dMQkMFa2Nrs0hUDcF.62qONruluGtIDS8LtLog7SAuYU7dbOMexLyJX0z7YohILhCToUt8hHa0";
       openssh.authorizedKeys.keys = [
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2jPT/9sf897gTeV7skAMZe6a2vMaLXMwdp1QQDvbt4"
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPq58/Uy+EmKE+b4RveIsfUffQ+nHpW+D6rg2b70l3mS"
       ];
-      shell = pkgs.bash;
     };
     users.groups.artur.gid = 1000;
   };
@@ -23,7 +21,6 @@
     age.secrets.ghcr-token = {
       rekeyFile = ../kubernetes/secrets/ghcr-token.age;
       owner = "artur";
-      mode = "0400";
     };
 
     users.users.artur.extraGroups = [
@@ -75,7 +72,6 @@
       enable = true;
       settings.font.normal = {
         family = "FiraCode Nerd Font";
-        style = "Regular";
       };
     };
 

@@ -4,7 +4,6 @@
       device = "none";
       fsType = "tmpfs";
       options = [
-        "defaults"
         "size=25%"
         "mode=755"
       ];
@@ -24,7 +23,6 @@
       directories = [
         "/var/lib/nixos"
         "/var/lib/systemd"
-        "/var/lib/NetworkManager"
         "/var/log"
       ];
     };
@@ -35,7 +33,6 @@
         type = "ed25519";
       }
     ];
-    age.identityPaths = ["/persist/etc/ssh/ssh_host_ed25519_key"];
     environment.etc."machine-id".source = "/persist/etc/machine-id";
     systemd.tmpfiles.rules = [
       "d /persist 0755 root root - -"

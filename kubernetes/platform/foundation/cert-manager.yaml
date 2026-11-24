@@ -5,12 +5,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: cert-manager
   sources:
     - repoURL: quay.io/jetstack/charts
@@ -27,16 +23,6 @@ spec:
           crds:
             enabled: true
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m

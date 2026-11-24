@@ -5,12 +5,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "1"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: istio-system
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
@@ -23,20 +19,10 @@ spec:
         - .webhooks[]?.failurePolicy
         - .webhooks[]?.clientConfig.caBundle
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
       - RespectIgnoreDifferences=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -45,12 +31,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "2"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: istio-system
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
@@ -66,7 +48,6 @@ spec:
                   service: k8s-monitoring-alloy-receiver.observability.svc.cluster.local
                   port: 4317
           autoscaleMin: 2
-          replicaCount: 2
           resources:
             requests:
               cpu: 100m
@@ -91,20 +72,9 @@ spec:
       jqPathExpressions:
         - .webhooks[]?.clientConfig.caBundle
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
     syncOptions:
-      - CreateNamespace=true
       - ServerSideApply=true
       - RespectIgnoreDifferences=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
 ---
 apiVersion: telemetry.istio.io/v1
 kind: Telemetry
@@ -127,12 +97,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: istio-system
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
@@ -141,8 +107,6 @@ spec:
       helm:
         valuesObject:
           profile: ambient
-          cniConfDir: /etc/cni/net.d
-          cniBinDir: /opt/cni/bin
           # Keep the chain in istio-cni's own file, which sorts before Cilium's; Cilium rewrites its file at every boot
           # without istio-cni, and pods started before istio-cni re-chains it would stay out of the mesh
           istioOwnedCNIConfig: true
@@ -150,19 +114,8 @@ spec:
           ambient:
             enableAmbientDetectionRetry: true
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
     syncOptions:
-      - CreateNamespace=true
       - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -171,12 +124,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: istio-system
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
@@ -189,16 +138,5 @@ spec:
               cpu: 50m
               memory: 128Mi
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
     syncOptions:
-      - CreateNamespace=true
       - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m

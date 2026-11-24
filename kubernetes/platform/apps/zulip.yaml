@@ -1,0 +1,349 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zulip
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: zulip
+  namespace: postgres
+spec:
+  name: zulip
+  passwordSecret:
+    name: zulip-pg-creds
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: zulip
+  namespace: postgres
+spec:
+  name: zulip
+  owner: zulip
+  encoding: UTF8
+  localeCollate: C.UTF-8
+  localeCType: C.UTF-8
+  template: template0
+  schemas:
+    - name: zulip
+      owner: zulip
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: zulip-pg-creds
+  namespace: postgres
+spec:
+  target:
+    name: zulip-pg-creds
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: zulip
+        password: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: zulip/db
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: zulip
+  namespace: zulip
+spec:
+  target:
+    name: zulip
+  data:
+    - secretKey: db-password
+      remoteRef:
+        key: zulip/db
+        property: password
+    - secretKey: secret-key
+      remoteRef:
+        key: zulip/secret-key
+        property: secret
+    - secretKey: rabbitmq-password
+      remoteRef:
+        key: zulip/rabbitmq
+        property: password
+    - secretKey: valkey-password
+      remoteRef:
+        key: zulip/valkey
+        property: password
+    - secretKey: oidc-client-secret
+      remoteRef:
+        key: zulip/oidc-client
+        property: client_secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey
+  namespace: zulip
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    reloader.stakater.com/auto: "true"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+    spec:
+      containers:
+        - name: valkey
+          image: docker.io/valkey/valkey:9.1
+          args:
+            [
+              "--requirepass",
+              "$(VALKEY_PASSWORD)",
+              "--save",
+              "",
+              "--appendonly",
+              "no",
+            ]
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zulip
+                  key: valkey-password
+          ports:
+            - name: valkey
+              containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: valkey
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: zulip
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+spec:
+  selector:
+    app.kubernetes.io/name: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: zulip
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+    reloader.stakater.com/auto: "true"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rabbitmq
+    spec:
+      securityContext:
+        runAsUser: 999
+      volumes:
+        - name: data
+          emptyDir: {}
+      containers:
+        - name: rabbitmq
+          image: docker.io/library/rabbitmq:4.2
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: zulip
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: zulip
+                  key: rabbitmq-password
+          ports:
+            - name: amqp
+              containerPort: 5672
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+            periodSeconds: 30
+            timeoutSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: zulip
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+spec:
+  selector:
+    app.kubernetes.io/name: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memcached
+  namespace: zulip
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: memcached
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: memcached
+    spec:
+      containers:
+        - name: memcached
+          image: docker.io/library/memcached:1.6
+          args: ["-m", "256"]
+          ports:
+            - name: memcached
+              containerPort: 11211
+          readinessProbe:
+            tcpSocket:
+              port: memcached
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 320Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memcached
+  namespace: zulip
+  annotations:
+    argocd.argoproj.io/sync-wave: "94"
+spec:
+  selector:
+    app.kubernetes.io/name: memcached
+  ports:
+    - name: memcached
+      port: 11211
+      targetPort: memcached
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zulip
+  namespace: argocd
+spec:
+  project: platform
+  destination:
+    namespace: zulip
+  sources:
+    - repoURL: ghcr.io/zulip/helm-charts
+      chart: zulip
+      targetRevision: 2.4.0
+      helm:
+        valuesObject:
+          statefulSetAnnotations:
+            reloader.stakater.com/auto: "true"
+          postgresql:
+            enabled: false
+          rabbitmq:
+            enabled: false
+          redis:
+            enabled: false
+          memcached:
+            enabled: false
+          externalPostgresql:
+            host: default-postgres-cluster-rw.postgres.svc.cluster.local
+            password:
+              valueFrom:
+                secretKeyRef:
+                  name: zulip
+                  key: db-password
+          externalRabbitmq:
+            host: rabbitmq.zulip.svc.cluster.local
+            password:
+              valueFrom:
+                secretKeyRef:
+                  name: zulip
+                  key: rabbitmq-password
+          externalRedis:
+            host: valkey.zulip.svc.cluster.local
+            password:
+              valueFrom:
+                secretKeyRef:
+                  name: zulip
+                  key: valkey-password
+          externalMemcached:
+            host: memcached.zulip.svc.cluster.local
+            password: ""
+          zulip:
+            persistence:
+              storageClass: iscsi
+              size: 20Gi
+            environment:
+              SETTING_EXTERNAL_HOST: zulip.burned.host
+              SETTING_ZULIP_ADMINISTRATOR: admin@burned.host
+              # The gateway and cloudflared reach Zulip from the pod network
+              LOADBALANCER_IPS: fd42::/56
+              # CloudNativePG backs up the database
+              AUTO_BACKUP_ENABLED: "False"
+              ZULIP_AUTH_BACKENDS: GenericOpenIdConnectBackend
+              SETTING_SOCIAL_AUTH_OIDC_ENABLED_IDPS: >-
+                {"keycloak": {"oidc_url": "https://auth.burned.host/realms/burned", "display_name": "Keycloak", "display_icon": None, "client_id": "zulip", "secret": get_secret("social_auth_oidc_secret"), "auto_signup": True}}
+              SETTING_SOCIAL_AUTH_OIDC_FULL_NAME_VALIDATED: "True"
+              SETTING_ZULIP_SERVICE_PUSH_NOTIFICATIONS: "True"
+              SECRETS_secret_key:
+                valueFrom:
+                  secretKeyRef:
+                    name: zulip
+                    key: secret-key
+              SECRETS_social_auth_oidc_secret:
+                valueFrom:
+                  secretKeyRef:
+                    name: zulip
+                    key: oidc-client-secret
+          resources:
+            requests:
+              cpu: 200m
+              memory: 2Gi
+            limits:
+              memory: 4Gi
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: zulip
+  namespace: zulip
+spec:
+  hostnames:
+    - zulip.burned.host
+  rules:
+    - backendRefs:
+        - name: zulip
+          port: 80

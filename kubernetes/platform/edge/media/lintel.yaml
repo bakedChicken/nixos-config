@@ -15,8 +15,6 @@ spec:
       labels:
         app: lintel
     spec:
-      nodeSelector:
-        storage.burned.host/zfs: "true"
       securityContext:
         runAsUser: 569
         runAsGroup: 569
@@ -29,14 +27,12 @@ spec:
           env:
             - name: LINTEL_UMASK
               value: "0007"
-            - name: LINTEL_ADDR
-              value: "0.0.0.0:8420"
             - name: LINTEL_LIBRARY
               value: /srv/3d-models
-            - name: XDG_CACHE_HOME
-              value: /cache
             - name: TZ
               value: "Europe/Vienna"
+            - name: LINTEL_WORKER_TOKEN_FILE
+              value: /run/lintel/worker-token
           ports:
             - name: http
               containerPort: 8420
@@ -44,16 +40,39 @@ spec:
             httpGet:
               path: /api/v1/health
               port: 8420
-            periodSeconds: 10
           volumeMounts:
             - name: library
               mountPath: /srv/3d-models
             - name: zfs
               mountPath: /dev/zfs
-            - name: cache
-              mountPath: /cache
             - name: tmp
               mountPath: /tmp
+            - name: beside
+              mountPath: /run/lintel
+        # The embedding worker: reads previews and category prompts with CLIP for search by
+        # description and categorising by look, with the token Lintel writes for it.
+        - name: worker
+          image: ghcr.io/bakedchicken/lintel-worker:latest
+          env:
+            - name: LINTEL_URL
+              value: http://127.0.0.1:8420
+            - name: LINTEL_TOKEN_FILE
+              value: /run/lintel/worker-token
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: worker-tmp
+              mountPath: /tmp
+            - name: beside
+              mountPath: /run/lintel
+              readOnly: true
       volumes:
         - name: library
           hostPath:
@@ -67,6 +86,12 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        - name: beside
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: worker-tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -79,7 +104,6 @@ spec:
   ports:
     - name: http
       port: 8420
-      targetPort: 8420
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

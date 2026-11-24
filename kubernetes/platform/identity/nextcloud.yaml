@@ -1,0 +1,13 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-oidc-client-secret
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "53"
+spec:
+  target:
+    name: nextcloud-oidc-client-secret
+  dataFrom:
+    - extract:
+        key: nextcloud/oidc-client

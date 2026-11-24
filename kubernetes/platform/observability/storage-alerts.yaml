@@ -1,0 +1,85 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: storage
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "72"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: storage
+      rules:
+        - alert: NodeDownHoldingVolumes
+          expr: max by (node) (kube_node_status_condition{condition="Ready", status="true"}) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.node }} is NotReady; its iSCSI volumes stay attached to it"
+            description: >-
+              Pods of {{ $labels.node }} cannot start elsewhere while it holds their volumes. Restart the VM; if it
+              stays down, run kubectl taint node {{ $labels.node }} node.kubernetes.io/out-of-service=nodeshutdown:NoExecute
+              to release them, and remove the taint once it is back.
+        - alert: NodeMemoryHighUtilization
+          # ZFS's ARC shrinks to c_min when programs need memory, but MemAvailable counts it as used
+          expr: |-
+            100 - (
+              (node_memory_MemAvailable_bytes{job="node-exporter"}
+                + clamp_min(node_zfs_arc_size{job="node-exporter"} - node_zfs_arc_c_min{job="node-exporter"}, 0))
+              or node_memory_MemAvailable_bytes{job="node-exporter"}
+            ) / node_memory_MemTotal_bytes{job="node-exporter"} * 100 > 90
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }} is running out of memory"
+            description: 'Memory use, not counting ZFS''s shrinkable cache, has been above 90% for 15 minutes: {{ printf "%.2f" $value }}%.'
+        - alert: LokiUploadFailing
+          expr: sum by (pod) (increase(loki_ingester_chunks_flush_failures_total[15m])) > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.pod }} cannot upload log chunks to RustFS"
+            description: >-
+              Loki keeps the chunks in memory and rewrites them to its iSCSI volume at every WAL checkpoint, which
+              grows into write bursts that time out the iSCSI sessions. Check RustFS.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-rules-storage
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "72"
+  labels:
+    loki_rule: ""
+data:
+  storage.yaml: |
+    groups:
+      - name: storage-kernel
+        rules:
+          - alert: ISCSIConnectionDrops
+            expr: 'sum by (instance) (count_over_time({job="integrations/kubernetes/journal"} |~ "detected conn error|ping timeout of [0-9]+ secs expired|DataOut timeout" [15m])) > 3'
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.instance }} logged {{ $value }} iSCSI connection drops in 15 minutes"
+              description: Writes to the volumes stall while sessions reconnect; repeated drops leave ext4 errors behind.
+          - alert: Ext4FilesystemErrors
+            expr: 'sum by (instance) (count_over_time({job="integrations/kubernetes/journal"} |~ "EXT4-fs error|EXT4-fs \\([a-z0-9]+\\): warning: mounting fs with errors" [15m])) > 0'
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.instance }} has an ext4 volume with errors"
+              description: >-
+                Stop the workload, run e2fsck -fy on the volume from a node over iSCSI (storage-station cannot open
+                an exported zvol) and start it again.
+          - alert: KernelBug
+            expr: 'sum by (instance) (count_over_time({job="integrations/kubernetes/journal"} |~ "BUG: |Oops: |soft lockup|blocked for more than [0-9]+ seconds" [15m])) > 0'
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.instance }} logged a kernel bug, lockup or hung task"
+              description: Read the kernel log around it.

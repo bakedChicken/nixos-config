@@ -1,0 +1,67 @@
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: nextcloud.oidc-client
+  namespace: openbao
+spec:
+  path: secret/data/nextcloud
+  name: oidc-client
+  secretKey: client_secret
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 48
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: nextcloud.db
+  namespace: openbao
+spec:
+  path: secret/data/nextcloud
+  name: db
+  secretKey: password
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: nextcloud.admin
+  namespace: openbao
+spec:
+  path: secret/data/nextcloud
+  name: admin
+  secretKey: password
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 24
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }
+---
+apiVersion: redhatcop.redhat.io/v1alpha1
+kind: RandomSecret
+metadata:
+  name: nextcloud.agents
+  namespace: openbao
+spec:
+  path: secret/data/nextcloud
+  name: agents
+  secretKey: password
+  secretFormat:
+    inlinePasswordPolicy: |
+      length = 32
+      rule "charset" {
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        min-chars = 1
+      }

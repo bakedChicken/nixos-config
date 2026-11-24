@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edge-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - app: gateway
+            namespace: gateway-system
+            wave: "10"
+          - app: browser
+            namespace: browser
+            wave: "20"
+          - app: mktxp
+            namespace: mktxp
+            wave: "20"
+          - app: smartctl
+            namespace: observability
+            wave: "20"
+  template:
+    metadata:
+      name: "{{ .app }}-edge"
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{ .wave }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      destination:
+        server: https://edge.burned.host:6443
+        namespace: "{{ .namespace }}"
+      source:
+        repoURL: oci://ghcr.io/bakedchicken/platform
+        targetRevision: latest
+        path: "edge/{{ .app }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: -1
+          refresh: true
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m

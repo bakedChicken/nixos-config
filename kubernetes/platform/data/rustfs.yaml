@@ -74,10 +74,6 @@ spec:
       remoteRef:
         key: tempo/rustfs
         property: secret_key
-    - secretKey: pyroscope
-      remoteRef:
-        key: pyroscope/rustfs
-        property: secret_key
     - secretKey: beer-tree
       remoteRef:
         key: beer-tree/rustfs
@@ -90,12 +86,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "34"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
   destination:
-    server: https://kubernetes.default.svc
     namespace: rustfs-system
   sources:
     - repoURL: https://charts.rustfs.com
@@ -104,9 +96,6 @@ spec:
       helm:
         valuesObject:
           podSecurityContext:
-            fsGroup: 10001
-            runAsUser: 10001
-            runAsGroup: 10001
             fsGroupChangePolicy: OnRootMismatch
           extraEnv:
             - name: RUSTFS_BROWSER_REDIRECT_URL
@@ -124,32 +113,21 @@ spec:
                   name: rustfs-oidc-client-secret
             - name: RUSTFS_IDENTITY_OPENID_SCOPES
               value: openid,profile,email
-            - name: RUSTFS_IDENTITY_OPENID_REDIRECT_URI
-              value: https://rustfs.internal.k8s.burned.host/rustfs/admin/v3/oidc/callback/default
-            - name: RUSTFS_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC
-              value: "off"
             - name: RUSTFS_IDENTITY_OPENID_DISPLAY_NAME
               value: Keycloak
             - name: RUSTFS_IDENTITY_OPENID_GROUPS_CLAIM
               value: groups
-            - name: RUSTFS_IDENTITY_OPENID_ROLES_CLAIM
-              value: roles
             - name: RUSTFS_IDENTITY_OPENID_EMAIL_CLAIM
               value: email
             - name: RUSTFS_IDENTITY_OPENID_USERNAME_CLAIM
               value: preferred_username
             - name: RUSTFS_OUTBOUND_ALLOW_ORIGINS
               value: https://auth.burned.host
-            - name: RUSTFS_OBS_ENVIRONMENT
-              value: production
-            - name: RUSTFS_OBS_LOGGER_LEVEL
-              value: warn
           gatewayApi:
             enabled: true
             existingGateway:
               name: burned-gateway
               namespace: gateway-system
-            gatewayClass: cilium
             hostname: rustfs.internal.k8s.burned.host
             httpToHttpsRedirect: false
             listeners:
@@ -166,11 +144,12 @@ spec:
             existingSecret: rustfs-root-creds
           storageclass:
             dataStorageSize: 500Gi
-            logStorageSize: 1Gi
             name: iscsi
           config:
             rustfs:
               obs_log_directory: ""
+              obs_environment: production
+              log_level: warn
           extraManifests:
             - apiVersion: v1
               kind: ConfigMap
@@ -193,7 +172,6 @@ spec:
                   setup postgres-backup backups
                   setup loki loki
                   setup tempo tempo
-                  setup pyroscope pyroscope
                   setup beer-tree beer-tree
             - apiVersion: batch/v1
               kind: Job
@@ -235,20 +213,6 @@ spec:
                       - name: users
                         secret:
                           secretName: rustfs-users
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: -1
-      refresh: true
-      backoff:
-        duration: 10s
-        factor: 2
-        maxDuration: 5m
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -281,7 +245,6 @@ spec:
               type: ReplaceFullPath
               replaceFullPath: /rustfs/console/
 ---
-# Uploads from workstations and the Beer Tree GPU runner (home network and VPN only)
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
